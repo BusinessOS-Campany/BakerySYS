@@ -1,4 +1,4 @@
-# Bakery ERP & POS
+# BakerySYS
 
 Production-oriented bakery management system built with Next.js 16, React 19, TypeScript, PostgreSQL and Prisma 7. It covers the full operating cycle from purchasing and inventory through recipes, production, quality control, POS sales, supplier/customer balances, accounting and analytics.
 
