@@ -125,30 +125,6 @@ export const GET = apiRoute<unknown, SearchPayload>({
       })));
     }
 
-    if (can("orders.view")) {
-      tasks.push(db.customerOrder.findMany({
-        where: {
-          tenantId,
-          ...(auth.branchId ? { branchId: auth.branchId } : {}),
-          OR: [
-            { number: contains(q) }, { customerName: contains(q) },
-            { customerPhone: contains(q) }, { specialNotes: contains(q) },
-          ],
-        },
-        select: { id: true, number: true, customerName: true, customerPhone: true },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      }).then((rows): SearchGroup => ({
-        groupKey: "nav.orders",
-        results: rows.map((row): SearchResult => ({
-          id: row.id,
-          label: row.number,
-          subtitle: row.customerName || row.customerPhone || "",
-          href: href("/orders", q),
-        })),
-      })));
-    }
-
     if (can("users.manage")) {
       tasks.push(db.user.findMany({
         where: {

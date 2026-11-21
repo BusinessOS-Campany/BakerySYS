@@ -20,7 +20,6 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/pos", labelKey: "nav.pos", icon: "ShoppingCart", permission: "sales.create" },
       { href: "/sales", labelKey: "nav.sales", icon: "ReceiptText", permission: "sales.view" },
-      { href: "/orders", labelKey: "nav.orders", icon: "CakeSlice", permission: "orders.view" },
       { href: "/customers", labelKey: "nav.customers", icon: "UsersRound", permission: "customers.view" },
       { href: "/arap", labelKey: "nav.arap", icon: "Wallet", permission: "customers.view" },
     ],

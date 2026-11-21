@@ -78,7 +78,6 @@ Demo tenant: `golden-crust`. The seeded cash session is intentionally left `OPEN
 | Dashboard | `/` | Live KPIs, 14-day sales chart, low-stock alerts, quick actions |
 | POS | `/pos` | Product search, cart, payments, offline queue, cash-session aware |
 | Sales | `/sales` | Invoice register, invoice detail, sales returns with reversing journals |
-| Custom orders | `/orders` | Cake orders, deposits/balance payments, status transitions |
 | Products/master data | `/products`, `/ingredients`, `/categories`, `/units`, `/customers`, `/suppliers`, `/warehouses`, `/branches`, `/accounts`, `/employees`, `/expense-categories` | Generic, permission-gated CRUD |
 | Recipes | `/recipes` | Ingredient lines, costing snapshots, recalculation, new versions |
 | Production | `/production` | Plans, batches, material consumption, QC-gated completion |

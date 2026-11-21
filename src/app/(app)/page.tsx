@@ -48,7 +48,7 @@ export default async function DashboardPage() {
   ]);
   const warehouseIds = warehouses.map((w) => w.id);
 
-  const [todaySales, weekSales, monthExpenses, pendingOrders, monthBatches, recentSales, lowStock, receivables, ingredientLots, finishedLots] = await Promise.all([
+  const [todaySales, weekSales, monthExpenses, monthBatches, recentSales, lowStock, receivables, ingredientLots, finishedLots] = await Promise.all([
     db.sale.aggregate({
       where: { tenantId: auth.user.tenantId, ...branchFilter, status: "COMPLETED", invoiceDate: { gte: startToday } },
       _sum: { total: true, profit: true, costAmount: true },
@@ -61,13 +61,6 @@ export default async function DashboardPage() {
     db.expense.aggregate({
       where: { tenantId: auth.user.tenantId, ...branchFilter, status: "POSTED", expenseDate: { gte: startMonth } },
       _sum: { amount: true },
-    }),
-    db.customerOrder.count({
-      where: {
-        tenantId: auth.user.tenantId,
-        ...branchFilter,
-        status: { in: ["NEW", "CONFIRMED", "IN_PRODUCTION", "READY"] },
-      },
     }),
     db.productionBatch.findMany({
       where: { tenantId: auth.user.tenantId, ...branchFilter, createdAt: { gte: startMonth } },
@@ -130,7 +123,6 @@ export default async function DashboardPage() {
     { key: "dashboard.transactions", value: formatNumber(todaySales._count._all, locale, 0), sub: t("common.today"), href: "/sales", icon: TrendingUp, tone: "text-emerald-500" },
     { key: "dashboard.grossProfit", value: money(sum(todaySales._sum.profit)), sub: `${yesterdayDelta >= 0 ? "+" : ""}${yesterdayDelta}%`, href: "/reports", icon: Croissant, tone: "text-emerald-500" },
     { key: "dashboard.expenses", value: money(expenses), sub: t("common.month"), href: "/expenses", icon: Wallet, tone: "text-[var(--danger)]" },
-    { key: "dashboard.pendingOrders", value: formatNumber(pendingOrders, locale, 0), sub: t("nav.orders"), href: "/orders", icon: ClipboardList, tone: "text-amber-500" },
     { key: "dashboard.production", value: `${completionRate}%`, sub: `${completedBatches}/${monthBatches.length}`, href: "/production", icon: Factory, tone: "text-blue-500" },
     { key: "dashboard.rawStock", value: money(rawValue), sub: t("nav.ingredients"), href: "/inventory", icon: Boxes, tone: "text-violet-500" },
     { key: "dashboard.finishedStock", value: money(finishedValue), sub: t("nav.products"), href: "/inventory", icon: Croissant, tone: "text-cyan-500" },
@@ -141,7 +133,6 @@ export default async function DashboardPage() {
     { key: "sales.new", href: "/pos", icon: ReceiptText, show: auth.permissions.has("sales.create") },
     { key: "production.newBatch", href: "/production?new=1", icon: Factory, show: auth.permissions.has("production.manage") },
     { key: "nav.purchases", href: "/purchases?new=1", icon: ClipboardList, show: auth.permissions.has("purchases.manage") },
-    { key: "orders.new", href: "/orders?new=1", icon: Croissant, show: auth.permissions.has("orders.manage") },
   ].filter((action) => action.show);
 
   return (

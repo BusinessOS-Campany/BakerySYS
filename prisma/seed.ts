@@ -611,7 +611,7 @@ async function main() {
       {
         tenantId: tid, titleAr: "طلب مخصص جديد", titleEn: "New custom order",
         bodyAr: "طلب كيك بانتظار التنفيذ", bodyEn: "A cake order is awaiting production",
-        kind: "ORDER", link: "/orders",
+        kind: "ORDER",
       },
     ],
   });

@@ -82,7 +82,7 @@ export async function createOrder(tx: Db, input: {
     tenantId: input.tenantId,
     titleAr: "طلب مخصص جديد", titleEn: "New custom order",
     bodyAr: `الطلب ${number} بقيمة ${quotedAmount}`, bodyEn: `Order ${number} worth ${quotedAmount}`,
-    kind: "ORDERS", link: `/orders/${order.id}`,
+    kind: "ORDERS",
   });
   return order;
 }
@@ -143,7 +143,7 @@ export async function updateOrderStatus(tx: Db, input: {
     tenantId: input.tenantId,
     titleAr: "تحديث حالة الطلب", titleEn: "Order status updated",
     bodyAr: `الطلب ${order.number}: ${input.status}`, bodyEn: `Order ${order.number}: ${input.status}`,
-    kind: "ORDERS", link: `/orders/${order.id}`,
+    kind: "ORDERS",
   });
   return updated;
 }
