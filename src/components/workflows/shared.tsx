@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
-import { Plus, RefreshCw, X } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDate, formatNumber, type Locale } from "@/lib/i18n/dictionary";
 
@@ -162,6 +162,8 @@ export function useList<T>(
   const [rows, setRows] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const extractRef = useRef(extract);
+  extractRef.current = extract;
   const defaultExtract = useCallback((payload: unknown): T[] => {
     if (Array.isArray(payload)) return payload as T[];
     if (payload && typeof payload === "object") {
@@ -177,13 +179,13 @@ export function useList<T>(
     setError("");
     try {
       const payload = await apiFetch<unknown>(endpoint, locale);
-      setRows((extract ?? defaultExtract)(payload));
+      setRows((extractRef.current ?? defaultExtract)(payload));
     } catch (err) {
       setError(err instanceof Error ? err.message : L(locale, "تعذر تحميل البيانات", "Unable to load data"));
     } finally {
       setLoading(false);
     }
-  }, [defaultExtract, endpoint, extract, locale]);
+  }, [defaultExtract, endpoint, locale]);
 
   useEffect(() => { void load(); }, [load, refreshKey]);
   return { rows, setRows, loading, error, setError, reload: load };
@@ -261,6 +263,9 @@ export function DataPanel<T extends { id: string }>({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [values, setValues] = useState<FormValues>(() => defaultValues(form?.fields ?? [], form?.initial));
+  const hasControlledRows = controlledRows !== undefined;
+  const extractRef = useRef(extract);
+  extractRef.current = extract;
 
   const defaultExtract = useCallback((payload: unknown): T[] => {
     if (Array.isArray(payload)) return payload as T[];
@@ -272,18 +277,18 @@ export function DataPanel<T extends { id: string }>({
   }, []);
 
   const load = useCallback(async () => {
-    if (!endpoint) return;
+    if (!endpoint || hasControlledRows) return;
     setInternalLoading(true);
     setError("");
     try {
       const payload = await apiFetch<unknown>(endpoint, locale);
-      setInternalRows((extract ?? defaultExtract)(payload));
+      setInternalRows((extractRef.current ?? defaultExtract)(payload));
     } catch (err) {
       setError(err instanceof Error ? err.message : L(locale, "تعذر تحميل البيانات", "Unable to load data"));
     } finally {
       setInternalLoading(false);
     }
-  }, [defaultExtract, endpoint, extract, locale]);
+  }, [defaultExtract, endpoint, hasControlledRows, locale]);
 
   useEffect(() => { void load(); }, [load, refreshKey]);
   useEffect(() => {
@@ -331,11 +336,6 @@ export function DataPanel<T extends { id: string }>({
           {description ? <p className="muted mt-1 text-xs">{description}</p> : null}
         </div>
         <div className="flex gap-2">
-          {endpoint ? (
-            <button className="btn btn-secondary" onClick={() => void reload()} type="button" title={L(locale, "تحديث", "Refresh")}>
-              <RefreshCw className={cn("h-4 w-4", loading && "spinner")} />
-            </button>
-          ) : null}
           {showForm ? (
             <button className="btn btn-primary" onClick={() => setEditing(true)} type="button">
               <Plus className="h-4 w-4" /> {form?.submitLabel ?? L(locale, "إضافة", "Add")}

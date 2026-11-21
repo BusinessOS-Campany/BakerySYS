@@ -9,8 +9,12 @@ export type ResourceField = {
   defaultValue?: string | number | boolean;
   options?: { value: string; label: { ar: string; en: string } }[];
   optionResource?: string;
+  optionCodes?: string[];
+  optionLabels?: Record<string, { ar: string; en: string }>;
   optionLabel?: "name" | "code";
   hidden?: boolean;
+  autoCode?: string;
+  defaultFrom?: string;
 };
 
 export type ResourceConfig = {
@@ -40,20 +44,19 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     key: "categories", model: "category", entity: "Category",
     title: { ar: "التصنيفات", en: "Categories" },
     viewPermission: "products.view", managePermission: "products.manage",
-    searchFields: ["code", "nameAr", "nameEn"],
+    searchFields: ["nameAr"],
     fields: [
-      f("code", "الرمز", "Code", "text", { required: true, list: true }),
-      f("nameAr", "الاسم (عربي)", "Name (Arabic)", "text", { required: true, list: true }),
-      f("nameEn", "الاسم (إنجليزي)", "Name (English)", "text", { required: true }),
+      f("code", "الرمز", "Code", "text", { hidden: true, autoCode: "CAT" }),
+      f("nameAr", "اسم التصنيف", "Category name", "text", { required: true, list: true }),
+      f("nameEn", "الاسم (إنجليزي)", "Name (English)", "text", { hidden: true, defaultFrom: "nameAr" }),
       f("kind", "النوع", "Kind", "select", {
-        defaultValue: "PRODUCT", list: true,
+        required: true, defaultValue: "PRODUCT", list: true,
         options: [
           { value: "PRODUCT", label: { ar: "منتجات", en: "Products" } },
           { value: "INGREDIENT", label: { ar: "مكونات", en: "Ingredients" } },
           { value: "EXPENSE", label: { ar: "مصروفات", en: "Expenses" } },
         ],
       }),
-      active,
     ],
   },
   units: {
@@ -114,22 +117,22 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     key: "products", model: "product", entity: "Product",
     title: { ar: "المنتجات", en: "Products" },
     viewPermission: "products.view", managePermission: "products.manage",
-    searchFields: ["sku", "barcode", "nameAr", "nameEn"],
+    searchFields: ["sku", "nameAr"],
     fields: [
-      f("sku", "رمز المنتج", "SKU", "text", { required: true, list: true }),
-      f("barcode", "الباركود", "Barcode", "text"),
-      f("nameAr", "الاسم (عربي)", "Name (Arabic)", "text", { required: true, list: true }),
-      f("nameEn", "الاسم (إنجليزي)", "Name (English)", "text", { required: true }),
-      f("categoryId", "التصنيف", "Category", "select", { optionResource: "categories" }),
-      f("baseUnitId", "الوحدة", "Unit", "select", { required: true, optionResource: "units" }),
-      f("sellingPrice", "سعر البيع", "Selling price", "number", { required: true, defaultValue: 0, list: true }),
+      f("sku", "رمز المنتج", "SKU", "text", { hidden: true, autoCode: "PRD" }),
+      f("nameAr", "اسم المنتج", "Product name", "text", { required: true, list: true }),
+      f("nameEn", "الاسم (إنجليزي)", "Name (English)", "text", { hidden: true, defaultFrom: "nameAr" }),
+      f("categoryId", "التصنيف", "Category", "select", { optionResource: "categories", list: true }),
+      f("sellingPrice", "سعر المنتج", "Selling price", "number", { required: true, defaultValue: 0, list: true }),
       f("costPrice", "سعر التكلفة", "Cost price", "number", { defaultValue: 0, list: true }),
-      f("taxRate", "نسبة الضريبة", "Tax rate", "number", { defaultValue: 0 }),
-      f("shelfLifeDays", "العمر الافتراضي (يوم)", "Shelf life (days)", "number"),
-      f("minStock", "الحد الأدنى", "Minimum stock", "number", { defaultValue: 0 }),
-      f("maxStock", "الحد الأعلى", "Maximum stock", "number", { defaultValue: 0 }),
-      f("isWeighted", "يُباع بالوزن", "Sold by weight", "boolean", { defaultValue: false }),
-      active,
+      f("baseUnitId", "الوحدة", "Unit", "select", {
+        required: true, list: true, optionResource: "units", optionCodes: ["pcs", "kg"],
+        optionLabels: {
+          pcs: { ar: "حبة", en: "Piece" },
+          kg: { ar: "كيلو", en: "Kilogram" },
+        },
+      }),
+      f("piecesPerUnit", "عدد القطع في الوحدة", "Pieces per unit", "number", { required: true, defaultValue: 1, list: true }),
     ],
   },
   warehouses: {
@@ -158,24 +161,14 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     key: "customers", model: "customer", entity: "Customer",
     title: { ar: "العملاء", en: "Customers" },
     viewPermission: "customers.view", managePermission: "customers.manage",
-    searchFields: ["code", "nameAr", "nameEn", "phone"],
+    searchFields: ["nameAr", "phone"],
     fields: [
-      f("code", "الرمز", "Code", "text", { required: true, list: true }),
-      f("nameAr", "الاسم (عربي)", "Name (Arabic)", "text", { required: true, list: true }),
-      f("nameEn", "الاسم (إنجليزي)", "Name (English)", "text", { required: true }),
-      f("phone", "الهاتف", "Phone", "text", { list: true }),
-      f("email", "البريد الإلكتروني", "Email", "text"),
-      f("creditLimit", "حد الائتمان", "Credit limit", "number", { defaultValue: 0 }),
-      f("customerGroup", "المجموعة", "Group", "select", {
-        defaultValue: "RETAIL",
-        options: [
-          { value: "RETAIL", label: { ar: "تجزئة", en: "Retail" } },
-          { value: "WHOLESALE", label: { ar: "جملة", en: "Wholesale" } },
-          { value: "VIP", label: { ar: "مميز", en: "VIP" } },
-        ],
-      }),
-      f("notes", "ملاحظات", "Notes", "textarea"),
-      active,
+      f("code", "الرمز", "Code", "text", { hidden: true, autoCode: "CUS" }),
+      f("nameAr", "الاسم", "Name", "text", { required: true, list: true }),
+      f("nameEn", "الاسم (إنجليزي)", "Name (English)", "text", { hidden: true, defaultFrom: "nameAr" }),
+      f("phone", "رقم الهاتف", "Phone", "text", { list: true }),
+      f("creditLimit", "حد الائتمان", "Credit limit", "number", { defaultValue: 0, list: true }),
+      f("notes", "ملاحظات", "Notes", "textarea", { list: true }),
     ],
   },
   employees: {

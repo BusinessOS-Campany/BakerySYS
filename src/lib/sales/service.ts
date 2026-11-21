@@ -30,7 +30,7 @@ export async function createSale(tx: Db, auth: AuthContext, input: {
   notes?: string;
 }) {
   assertBranchAccess(auth, input.branchId);
-  if (!input.lines?.length) throw new AppError("VALIDATION", "Cart is empty", "ط§ظ„ط³ظ„ط© ظپط§ط±ط؛ط©");
+  if (!input.lines?.length) throw new AppError("VALIDATION", "Cart is empty", "السلة فارغة");
   if (input.idempotencyKey) {
     const existing = await tx.sale.findUnique({
       where: {
@@ -69,7 +69,7 @@ export async function createSale(tx: Db, auth: AuthContext, input: {
 
   for (const line of input.lines) {
     const product = productMap.get(line.productId);
-    if (!product) throw new AppError("NOT_FOUND", "Product not available", "ط§ظ„ظ…ظ†طھط¬ ط؛ظٹط± ظ…طھط§ط­");
+    if (!product) throw new AppError("NOT_FOUND", "Product not available", "المنتج غير متاح");
     const variant = line.variantId ? variantMap.get(line.variantId) : undefined;
     const unitPrice = round(Number(product.sellingPrice) + Number(variant?.priceAdjustment ?? 0), 6);
     const lineDiscount = round((line.discount ?? 0) + (discountTotal > 0 ? Math.min(discountTotal, unitPrice * line.quantity) : 0), 6);
@@ -87,6 +87,7 @@ export async function createSale(tx: Db, auth: AuthContext, input: {
       quantity: line.quantity, movementType: "SALE",
       referenceType: "SALE", referenceId: "pending", createdById: auth.user.id,
       note: line.note ?? undefined,
+      allowNegative: true, fallbackUnitCost: Number(product.costPrice),
     });
     const unitCost = removal.allocations.length
       ? round(removal.cost / round(line.quantity, 6), 6)
@@ -103,7 +104,7 @@ export async function createSale(tx: Db, auth: AuthContext, input: {
   const total = round(prepared.reduce((s, p) => s + p.total, 0), 6);
   const paid = round(input.payments.reduce((s, p) => s + p.amount, 0), 6);
   if (paid < total - 0.000001) {
-    throw new AppError("VALIDATION", "Payments do not cover the invoice total", "ط§ظ„ظ…ط¨ط§ظ„ط؛ ط§ظ„ظ…ط¯ظپظˆط¹ط© ظ„ط§ طھط؛ط·ظٹ ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ظپط§طھظˆط±ط©");
+    throw new AppError("VALIDATION", "Payments do not cover the invoice total", "المبالغ المدفوعة لا تغطي إجمالي الفاتورة");
   }
   const invoiceNumber = await nextNumber(tx, auth.user.tenantId, auth.tenant.invoicePrefix, auth.tenant.invoicePrefix + "-");
   const sale = await tx.sale.create({
@@ -171,6 +172,15 @@ export async function createSale(tx: Db, auth: AuthContext, input: {
         amount: round(creditAmount, 6), status: "OPEN",
       },
     });
+    await tx.customerTransaction.create({
+      data: {
+        tenantId: auth.user.tenantId, customerId: input.customerId,
+        kind: "DEBT", amount: round(creditAmount, 4),
+        notes: `فاتورة ${invoiceNumber}`,
+        sourceType: "SALE", sourceId: sale.id,
+        entryDate: new Date(sale.invoiceDate),
+      },
+    });
     await tx.customer.update({
       where: { id: input.customerId },
       data: { balance: { increment: round(creditAmount, 6) }, loyaltyPoints: { increment: Math.floor(total) } },
@@ -202,16 +212,16 @@ export async function refundSale(tx: Db, auth: AuthContext, input: {
   method?: string;
 }) {
   const sale = await tx.sale.findFirst({ where: { id: input.saleId, tenantId: auth.user.tenantId } });
-  if (!sale) throw new AppError("NOT_FOUND", "Sale not found", "ط§ظ„ط¨ظٹط¹ ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
-  if (sale.status === "REFUNDED") throw new AppError("INVALID_STATE", "Sale already refunded", "طھظ… ط§ط³طھط±ط¯ط§ط¯ ط§ظ„ظپط§طھظˆط±ط© ظ…ط³ط¨ظ‚ط§ظ‹");
-  if (!input.items.length) throw new AppError("VALIDATION", "No refund items", "ظ„ط§ طھظˆط¬ط¯ ط¨ظ†ظˆط¯ ظ„ظ„ط§ط³طھط±ط¬ط§ط¹");
+  if (!sale) throw new AppError("NOT_FOUND", "Sale not found", "البيع غير موجود");
+  if (sale.status === "REFUNDED") throw new AppError("INVALID_STATE", "Sale already refunded", "تم استرداد الفاتورة مسبقاً");
+  if (!input.items.length) throw new AppError("VALIDATION", "No refund items", "لا توجد بنود للاسترجاع");
   const saleItems = await tx.saleItem.findMany({ where: { saleId: sale.id } });
   const requested = new Map<string, number>();
   for (const refund of input.items) {
     const original = saleItems.find((i) => i.id === refund.saleItemId);
-    if (!original) throw new AppError("NOT_FOUND", "Sale item not found", "ط¨ظ†ط¯ ط§ظ„ظپط§طھظˆط±ط© ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
+    if (!original) throw new AppError("NOT_FOUND", "Sale item not found", "بند الفاتورة غير موجود");
     if (refund.quantity <= 0) {
-      throw new AppError("VALIDATION", "Invalid refund quantity", "ظƒظ…ظٹط© ط§ظ„ط§ط³طھط±ط¬ط§ط¹ ط؛ظٹط± طµط­ظٹط­ط©");
+      throw new AppError("VALIDATION", "Invalid refund quantity", "كمية الاسترجاع غير صحيحة");
     }
     requested.set(original.id, round((requested.get(original.id) ?? 0) + refund.quantity, 6));
   }
@@ -236,7 +246,7 @@ export async function refundSale(tx: Db, auth: AuthContext, input: {
     const previous = alreadyRefunded.get(item.id) ?? 0;
     const quantity = requested.get(item.id) ?? 0;
     if (previous + quantity > originalQty + 0.000001) {
-      throw new AppError("VALIDATION", "Refund quantity exceeds remaining quantity", "ظƒظ…ظٹط© ط§ظ„ط§ط³طھط±ط¬ط§ط¹ طھطھط¬ط§وز ط§ظ„ظƒظ…ظٹط© ط§ظ„ظ…طھط¨ظپظٹط©");
+      throw new AppError("VALIDATION", "Refund quantity exceeds remaining quantity", "كمية الاسترجاع تتجاوز الكمية المتبقية");
     }
     originalQtyTotal = round(originalQtyTotal + originalQty, 6);
     refundedQtyTotal = round(refundedQtyTotal + previous + quantity, 6);
@@ -322,6 +332,14 @@ export async function refundSale(tx: Db, auth: AuthContext, input: {
       where: { id: sale.customerId },
       data: { balance: { decrement: refundAmount } },
     });
+    await tx.customerTransaction.create({
+      data: {
+        tenantId: auth.user.tenantId, customerId: sale.customerId,
+        kind: "PAYMENT", amount: round(refundAmount, 4),
+        notes: `مرتجع ${number}`,
+        sourceType: "SALE_RETURN", sourceId: returnDoc.id,
+      },
+    });
   }
   return postedReturn;
 }
@@ -333,11 +351,11 @@ export async function openCashSession(tx: Db, auth: AuthContext, input: {
   const register = await tx.cashRegister.findFirst({
     where: { id: input.registerId, tenantId: auth.user.tenantId },
   });
-  if (!register) throw new AppError("NOT_FOUND", "Register not found", "ط§ظ„طµظ†ط¯ظˆظ‚ ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
+  if (!register) throw new AppError("NOT_FOUND", "Register not found", "الصندوق غير موجود");
   const open = await tx.cashSession.findFirst({
     where: { tenantId: auth.user.tenantId, registerId: register.id, status: "OPEN" },
   });
-  if (open) throw new AppError("CONFLICT", "Register already open", "ط§ظ„طµظ†ط¯ظˆظ‚ ظ…ظپطھظˆط­ ط¨ط§ظ„ظپط¹ظ„");
+  if (open) throw new AppError("CONFLICT", "Register already open", "الصندوق مفتوح بالفعل");
   return tx.cashSession.create({
     data: {
       tenantId: auth.user.tenantId, registerId: register.id, cashierId: auth.user.id,
@@ -354,7 +372,7 @@ export async function closeCashSession(tx: Db, auth: AuthContext, input: {
   const session = await tx.cashSession.findFirst({
     where: { id: input.sessionId, tenantId: auth.user.tenantId },
   });
-  if (!session || session.status !== "OPEN") throw new AppError("INVALID_STATE", "Session is not open", "ط§ظ„ظˆط±ط¯ظٹط© ط؛ظٹط± ظ…ظپطھظˆط­ط©");
+  if (!session || session.status !== "OPEN") throw new AppError("INVALID_STATE", "Session is not open", "الوردية غير مفتوحة");
   const movements = await tx.cashMovement.findMany({ where: { sessionId: session.id } });
   const sales = await tx.sale.findMany({
     where: {
@@ -374,8 +392,8 @@ export async function closeCashSession(tx: Db, auth: AuthContext, input: {
   if (Math.abs(difference) >= 0.000001) {
     await notify(tx, {
       tenantId: auth.user.tenantId, userId: auth.user.id,
-      titleAr: "ظپط±ظ‚ ظپظٹ ط§ظ„طµظ†ط¯ظˆظ‚", titleEn: "Cash discrepancy",
-      bodyAr: `ط§ظ„ظپط±ظ‚: ${difference}`, bodyEn: `Difference: ${difference}`,
+      titleAr: "فرق في الصندوق", titleEn: "Cash discrepancy",
+      bodyAr: `الفرق: ${difference}`, bodyEn: `Difference: ${difference}`,
       kind: "CASH", link: `/pos`,
     });
   }

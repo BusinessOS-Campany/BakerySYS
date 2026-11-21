@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pencil, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { FileText, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { CustomerStatement } from "@/components/customers/customer-statement";
 import type { ResourceConfig, ResourceField } from "@/lib/resources/config";
 import { cn } from "@/lib/utils";
 import { formatDate, formatNumber, translate, type Locale } from "@/lib/i18n/dictionary";
@@ -9,28 +11,56 @@ import { formatDate, formatNumber, translate, type Locale } from "@/lib/i18n/dic
 type Row = Record<string, unknown> & { id: string };
 type Option = { id: string; code?: string; nameAr?: string; nameEn?: string };
 
+function fieldOptions(field: ResourceField, options: Record<string, Option[]>): Option[] {
+  const all = field.optionResource ? (options[field.optionResource] ?? []) : [];
+  if (!field.optionCodes?.length) return all;
+  return all.filter((option) => field.optionCodes!.includes(String(option.code)));
+}
+
 export function ResourceTable({
   config,
   locale,
   canManage,
+  currency,
   decimalPlaces,
 }: {
   config: ResourceConfig;
   locale: Locale;
   canManage: boolean;
+  currency: string;
   decimalPlaces: number;
 }) {
-  const t = (key: string) => translate(locale, key);
+  const t = useCallback((key: string) => translate(locale, key), [locale]);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const urlSearch = searchParams.get("search") ?? "";
+  const statementId = config.key === "customers" ? searchParams.get("statement") : null;
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState(urlSearch);
+  const [search, setSearch] = useState(urlSearch);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Row | "new" | null>(null);
   const [options, setOptions] = useState<Record<string, Option[]>>({});
   const [saving, setSaving] = useState(false);
   const pageSize = 25;
+
+  useEffect(() => {
+    setSearchInput(urlSearch);
+    setSearch(urlSearch);
+    setPage(1);
+  }, [urlSearch]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,15 +97,17 @@ export function ResourceTable({
   const columns = useMemo(() => config.fields.filter((f) => f.list), [config.fields]);
   const pages = Math.max(Math.ceil(total / pageSize), 1);
 
-  function optionLabel(resource: string, value: unknown) {
-    const option = (options[resource] ?? []).find((o) => o.id === value);
+  function optionLabelFor(field: ResourceField, value: unknown) {
+    const option = fieldOptions(field, options).find((o) => o.id === value);
     if (!option) return String(value ?? "").slice(0, 8);
+    const override = option.code ? field.optionLabels?.[String(option.code)] : undefined;
+    if (override) return override[locale];
     return locale === "ar" ? (option.nameAr ?? option.code ?? option.id) : (option.nameEn ?? option.code ?? option.id);
   }
 
   function renderCell(field: ResourceField, row: Row) {
     const value = row[field.name];
-    if (field.optionResource && value) return optionLabel(field.optionResource, value);
+    if (field.optionResource && value) return optionLabelFor(field, value);
     if (field.options) {
       const opt = field.options.find((o) => o.value === value);
       return opt ? opt.label[locale] : String(value ?? "—");
@@ -104,6 +136,33 @@ export function ResourceTable({
     await load();
   }
 
+  function openStatement(row: Row) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("statement", row.id);
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  function closeStatement() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("statement");
+    const suffix = params.toString();
+    router.replace(suffix ? `${pathname}?${suffix}` : pathname);
+  }
+
+  const statementCustomer = statementId ? rows.find((row) => row.id === statementId) ?? ({ id: statementId } as Row) : null;
+
+  if (statementCustomer) {
+    return (
+      <CustomerStatement
+        customer={statementCustomer}
+        currency={currency}
+        decimalPlaces={decimalPlaces}
+        locale={locale}
+        onBack={closeStatement}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -112,9 +171,6 @@ export function ResourceTable({
           <p className="muted mt-1 text-sm">{total} {t("common.nameEn") === "Name (English)" ? "records" : "سجل"}</p>
         </div>
         <div className="flex gap-2">
-          <button className="btn btn-secondary" onClick={() => void load()} type="button">
-            <RefreshCw className={cn("h-4 w-4", loading && "spinner")} />
-          </button>
           {canManage ? (
             <button className="btn btn-primary" onClick={() => setEditing("new")} type="button">
               <Plus className="h-4 w-4" /> {t("action.new")}
@@ -132,8 +188,8 @@ export function ResourceTable({
             <input
               className="input ps-9"
               placeholder={t("action.search")}
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
           </div>
         </div>
@@ -156,6 +212,11 @@ export function ResourceTable({
                   {canManage ? (
                     <td>
                       <div className="flex gap-1">
+                        {config.key === "customers" ? (
+                          <button className="rounded p-1.5 text-[var(--primary)] hover:bg-[var(--surface-muted)]" onClick={() => openStatement(row)} title={t("statement.action")} type="button">
+                            <FileText className="h-4 w-4" />
+                          </button>
+                        ) : null}
                         <button className="rounded p-1.5 hover:bg-[var(--surface-muted)]" onClick={() => setEditing(row)} title={t("action.edit")} type="button">
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -194,6 +255,7 @@ export function ResourceTable({
           onError={setError}
         />
       ) : null}
+
     </div>
   );
 }
@@ -219,7 +281,8 @@ function ResourceForm({
   setSaving: (value: boolean) => void;
   onError: (value: string) => void;
 }) {
-  const t = (key: string) => translate(locale, key);
+  const t = useCallback((key: string) => translate(locale, key), [locale]);
+  const visibleFields = config.fields.filter((field) => !field.hidden);
   const [values, setValues] = useState<Record<string, string | boolean>>(() => {
     const initial: Record<string, string | boolean> = {};
     for (const field of config.fields) {
@@ -263,7 +326,7 @@ function ResourceForm({
           <button className="rounded p-1 hover:bg-[var(--surface-muted)]" onClick={onClose} type="button"><X className="h-5 w-5" /></button>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          {config.fields.map((field) => (
+          {visibleFields.map((field) => (
             <label key={field.name} className={cn("block text-xs font-medium", field.type === "textarea" && "sm:col-span-2")}>
               {field.label[locale]}{field.required ? " *" : ""}
               {field.type === "boolean" ? (
@@ -287,11 +350,11 @@ function ResourceForm({
                   {field.options?.map((option) => (
                     <option key={option.value} value={option.value}>{option.label[locale]}</option>
                   ))}
-                  {field.optionResource ? (options[field.optionResource] ?? []).map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {locale === "ar" ? (option.nameAr ?? option.code ?? option.id) : (option.nameEn ?? option.code ?? option.id)}
-                    </option>
-                  )) : null}
+                  {field.optionResource ? fieldOptions(field, options).map((option) => {
+                    const override = option.code ? field.optionLabels?.[String(option.code)] : undefined;
+                    const label = override ? override[locale] : locale === "ar" ? (option.nameAr ?? option.code ?? option.id) : (option.nameEn ?? option.code ?? option.id);
+                    return <option key={option.id} value={option.id}>{label}</option>;
+                  }) : null}
                 </select>
               ) : field.type === "textarea" ? (
                 <textarea className="input mt-1" rows={3} value={String(values[field.name] ?? "")} onChange={(e) => setValue(field.name, e.target.value)} />

@@ -6,8 +6,7 @@ import {
   ShoppingCart, Trash2, Wallet, Wifi, WifiOff,
 } from "lucide-react";
 import { enqueueSale, listQueuedSales, removeQueuedSale, updateQueuedSale } from "@/lib/offline/db";
-import { cn } from "@/lib/utils";
-import { formatMoney, formatNumber, translate, type Locale } from "@/lib/i18n/dictionary";
+import { formatMoney, translate, type Locale } from "@/lib/i18n/dictionary";
 
 type Product = {
   id: string; sku: string; nameAr: string; nameEn: string;
@@ -18,7 +17,6 @@ type Warehouse = { id: string; branchId: string | null; code: string; nameAr: st
 type Branch = { id: string; nameAr: string; nameEn: string };
 type Customer = { id: string; nameAr: string; nameEn: string; phone: string | null; code: string };
 type Register = { id: string; branchId: string; code: string; nameAr: string; nameEn: string };
-type Stock = { warehouseId: string; productId: string; quantity: string | number };
 type Session = { id: string; registerId: string; openingBalance: string | number; openedAt: string };
 
 export type PosData = {
@@ -27,7 +25,6 @@ export type PosData = {
   branches: Branch[];
   customers: Customer[];
   registers: Register[];
-  stocks: Stock[];
   openSession: Session | null;
 };
 
@@ -72,6 +69,12 @@ export function PosScreen({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [invoice, setInvoice] = useState("");
+
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(""), 2000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
 
   const branchWarehouses = useMemo(
     () => data.warehouses.filter((w) => !branchId || w.branchId === branchId || w.branchId === null),
@@ -138,12 +141,6 @@ export function PosScreen({
       p.nameAr.includes(term) || p.nameEn.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term));
   }, [data.products, search]);
 
-  const stockFor = useCallback((productId: string) => {
-    return data.stocks
-      .filter((s) => s.warehouseId === warehouseId && s.productId === productId)
-      .reduce((sum, s) => sum + Number(s.quantity), 0);
-  }, [data.stocks, warehouseId]);
-
   const lines = useMemo(() => Object.entries(cart)
     .map(([productId, quantity]) => {
       const product = data.products.find((p) => p.id === productId);
@@ -159,7 +156,8 @@ export function PosScreen({
   const subtotal = lines.reduce((sum, line) => sum + line.net, 0);
   const taxTotal = lines.reduce((sum, line) => sum + line.tax, 0);
   const total = Math.max(0, subtotal + taxTotal - discount);
-  const paidNumber = Number(paid || 0);
+  const onAccount = Boolean(customerId);
+  const paidNumber = onAccount ? total : Number(paid || 0);
   const remaining = Math.max(0, total - paidNumber);
 
   function add(productId: string, delta: number) {
@@ -190,7 +188,7 @@ export function PosScreen({
         quantity: line.quantity,
         discount: 0,
       })),
-      payments: [{ method, amount: paidNumber }],
+      payments: [{ method: onAccount ? "CREDIT" : method, amount: paidNumber }],
       discountAmount: discount,
       idempotencyKey: key,
       notes: online ? undefined : "Queued offline",
@@ -305,9 +303,11 @@ export function PosScreen({
 
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
       {message ? (
-        <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
-          <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />{message} {invoice ? `#${invoice}` : ""}</span>
-          <button onClick={() => setMessage("")} type="button">×</button>
+        <div className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4" role="status">
+          <div className="flex w-full max-w-md items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 shadow-lg">
+            <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />{message} {invoice ? `#${invoice}` : ""}</span>
+            <button onClick={() => setMessage("")} type="button">×</button>
+          </div>
         </div>
       ) : null}
 
@@ -322,8 +322,6 @@ export function PosScreen({
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {filteredProducts.map((product) => {
-              const available = stockFor(product.id);
-              const low = available < Number(product.minStock);
               return (
                 <button
                   key={product.id}
@@ -336,9 +334,6 @@ export function PosScreen({
                   <div className="muted mt-0.5 truncate text-[11px]">{product.sku}</div>
                   <div className="mt-2 flex items-center justify-between">
                     <strong className="text-sm text-[var(--primary)]">{money(Number(product.sellingPrice))}</strong>
-                    <span className={cn("text-[10px]", low ? "text-[var(--danger)]" : "muted")}>
-                      {formatNumber(available, locale, 0)}
-                    </span>
                   </div>
                 </button>
               );
@@ -395,25 +390,29 @@ export function PosScreen({
             </label>
             <label className="block text-xs font-medium">
               {t("pos.payment")}
-              <select className="input mt-1" value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
+              <select className="input mt-1" value={onAccount ? "CREDIT" : method} disabled={onAccount} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
                 {(["CASH", "CARD", "BANK_TRANSFER", "CREDIT"] as const).map((m) => (
                   <option key={m} value={m}>{t(`pos.method.${m}`)}</option>
                 ))}
               </select>
             </label>
-            <label className="block text-xs font-medium">
-              {t("pos.paid")}
-              <input
-                className="input mt-1"
-                type="number"
-                min="0"
-                step="any"
-                value={paid}
-                placeholder={money(total)}
-                onChange={(e) => setPaid(e.target.value)}
-              />
-            </label>
-            {remaining > 0 ? <div className="text-xs text-[var(--danger)]">{t("pos.remaining")}: {money(remaining)}</div> : null}
+            {onAccount ? (
+              <div className="rounded-lg bg-[var(--surface-muted)] p-2 text-xs text-[var(--primary)]">{t("pos.customerDebt")}</div>
+            ) : (
+              <label className="block text-xs font-medium">
+                {t("pos.paid")}
+                <input
+                  className="input mt-1"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={paid}
+                  placeholder={money(total)}
+                  onChange={(e) => setPaid(e.target.value)}
+                />
+              </label>
+            )}
+            {!onAccount && remaining > 0 ? <div className="text-xs text-[var(--danger)]">{t("pos.remaining")}: {money(remaining)}</div> : null}
             <button className="btn btn-primary w-full" disabled={busy || lines.length === 0 || !warehouseId} onClick={() => void checkout()} type="button">
               {busy ? t("common.loading") : <><CreditCard className="h-4 w-4" />{t("pos.checkout")}</>}
             </button>

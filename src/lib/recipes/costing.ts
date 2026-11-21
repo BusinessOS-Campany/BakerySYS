@@ -26,7 +26,7 @@ export async function toBaseQuantity(
   throw new AppError(
     "VALIDATION",
     `Incompatible units for ingredient ${ingredient.id}`,
-    "ظˆط­ط¯ط§طھ ط§ظ„ظ‚ظٹط§ط³ ط؛ظٹط± ظ…طھظˆط§ظپظ‚ط© ظ…ط¹ ط§ظ„ظ…ظƒظˆظ†",
+    "وحدات القياس غير متوافقة مع المكون",
   );
 }
 
@@ -60,7 +60,7 @@ export async function recipeRequirements(tx: Db, tenantId: string, versionId: st
   for (const line of lines) {
     const ingredient = byId.get(line.ingredientId);
     if (!ingredient) {
-      throw new AppError("NOT_FOUND", "Recipe references a missing ingredient", "ط§ظ„ظˆطµظپط© طھط­طھظˆظٹ ط¹ظ„ظ‰ ظ…ظƒظˆظ† ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
+      throw new AppError("NOT_FOUND", "Recipe references a missing ingredient", "الوصفة تحتوي على مكون غير موجود");
     }
     const baseQuantity = await toBaseQuantity(tx, tenantId, ingredient, line.unitId, Number(line.quantity) * multiplier);
     const unitCost = Number(ingredient.currentCost);
@@ -87,16 +87,16 @@ export async function recalculateRecipeCost(tx: Db, tenantId: string, recipeId: 
   result: RecipeCostResult;
 }> {
   const recipe = await tx.recipe.findFirst({ where: { id: recipeId, tenantId } });
-  if (!recipe) throw new AppError("NOT_FOUND", "Recipe not found", "ط§ظ„ظˆطµظپط© ط؛ظٹط± ظ…ظˆط¬ظˆط¯ط©");
+  if (!recipe) throw new AppError("NOT_FOUND", "Recipe not found", "الوصفة غير موجودة");
   const product = await tx.product.findFirst({ where: { id: recipe.productId, tenantId } });
-  if (!product) throw new AppError("NOT_FOUND", "Linked product not found", "ط§ظ„ظ…ظ†طھط¬ ط§ظ„ظ…ط±طھط¨ط· ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
+  if (!product) throw new AppError("NOT_FOUND", "Linked product not found", "المنتج المرتبط غير موجود");
   const version = await tx.recipeVersion.findFirst({
     where: { recipeId, version: recipe.currentVersion },
     orderBy: { version: "desc" },
   });
-  if (!version) throw new AppError("NOT_FOUND", "Recipe version not found", "ظ†ط³ط®ط© ط§ظ„ظˆطµظپط© ط؛ظٹط± ظ…ظˆط¬ظˆط¯ط©");
+  if (!version) throw new AppError("NOT_FOUND", "Recipe version not found", "نسخة الوصفة غير موجودة");
   const items = await recipeRequirements(tx, tenantId, version.id, 1);
-  const flourLine = items.find((i) => /flour|ط¯ظ‚ظٹظ‚/i.test(i.nameEn + i.nameAr));
+  const flourLine = items.find((i) => /flour|دقيق/i.test(i.nameEn + i.nameAr));
   const result = calcRecipeCost({
     ingredients: items.map((i) => ({
       quantity: i.quantity,

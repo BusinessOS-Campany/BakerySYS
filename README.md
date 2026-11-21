@@ -24,7 +24,7 @@ Edit `.env.local` and set at minimum:
 ```dotenv
 DATABASE_URL="postgresql://bakery:bakery_dev_2026@localhost:5432/bakerysys"
 AUTH_SECRET="a-long-random-value"
-NEXT_PUBLIC_APP_URL="http://localhost:9000"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
 Generate a secret with:
@@ -51,7 +51,7 @@ npm run db:seed
 npm run dev
 ```
 
-Open <http://localhost:9000>.
+Open <http://localhost:3000>.
 
 ### Demo accounts
 
@@ -144,9 +144,9 @@ src/
 
 | Command | Description |
 | --- | --- |
-| `npm run dev` | Start development server on port 9000 |
+| `npm run dev` | Start development server on port 3000 |
 | `npm run build` | Generate Prisma client and build for production |
-| `npm start` | Start the production server on port 9000 |
+| `npm start` | Start the production server on port 3000 |
 | `npm run typecheck` | Generate Prisma client and run TypeScript validation |
 | `npm run lint` | Run ESLint |
 | `npm test` | Run Vitest unit tests |

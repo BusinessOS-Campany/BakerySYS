@@ -6,7 +6,7 @@ import {
   BarChart3, Boxes, CakeSlice, ClipboardList, Croissant, Factory, Landmark,
   LayoutDashboard, PanelLeftClose, PanelLeftOpen, ReceiptText, Settings,
   ShieldCheck, ShoppingCart, Tags, Truck, UserCog, UsersRound, Wallet,
-  Warehouse, Wheat, BookOpen, X, type LucideIcon,
+  Warehouse, X, type LucideIcon,
 } from "lucide-react";
 import { NAV_SECTIONS } from "./nav";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,7 @@ import { translate, type Locale } from "@/lib/i18n/dictionary";
 const ICONS: Record<string, LucideIcon> = {
   BarChart3, Boxes, CakeSlice, ClipboardList, Croissant, Factory, Landmark,
   LayoutDashboard, ReceiptText, Settings, ShieldCheck, ShoppingCart, Tags,
-  Truck, UserCog, UsersRound, Wallet, Warehouse, Wheat, BookOpen,
+  Truck, UserCog, UsersRound, Wallet, Warehouse,
 };
 
 export function Sidebar({

@@ -9,11 +9,13 @@ export async function ResourcePage({ resource }: { resource: string }) {
   const auth = await getAuth();
   if (!auth) redirect("/login");
   if (!auth.permissions.has(config.viewPermission) && !auth.roles.includes("OWNER")) redirect("/");
+  const publicConfig = { ...config, fields: config.fields.filter((field) => !field.hidden) };
   return (
     <ResourceTable
-      config={config}
+      config={publicConfig}
       locale={auth.locale}
       canManage={auth.permissions.has(config.managePermission) || auth.roles.includes("OWNER")}
+      currency={auth.tenant.currencyCode}
       decimalPlaces={auth.tenant.decimalPlaces}
     />
   );

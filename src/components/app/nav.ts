@@ -22,6 +22,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/sales", labelKey: "nav.sales", icon: "ReceiptText", permission: "sales.view" },
       { href: "/orders", labelKey: "nav.orders", icon: "CakeSlice", permission: "orders.view" },
       { href: "/customers", labelKey: "nav.customers", icon: "UsersRound", permission: "customers.view" },
+      { href: "/arap", labelKey: "nav.arap", icon: "Wallet", permission: "customers.view" },
     ],
   },
   {
@@ -29,8 +30,6 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/products", labelKey: "nav.products", icon: "Croissant", permission: "products.view" },
       { href: "/categories", labelKey: "nav.categories", icon: "Tags", permission: "products.view" },
-      { href: "/recipes", labelKey: "nav.recipes", icon: "BookOpen", permission: "recipes.view" },
-      { href: "/ingredients", labelKey: "nav.ingredients", icon: "Wheat", permission: "ingredients.view" },
       { href: "/production", labelKey: "nav.production", icon: "Factory", permission: "production.view" },
       { href: "/inventory", labelKey: "nav.inventory", icon: "Boxes", permission: "inventory.view" },
       { href: "/warehouses", labelKey: "nav.warehouses", icon: "Warehouse", permission: "warehouses.view" },

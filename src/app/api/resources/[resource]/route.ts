@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuth } from "@/lib/auth/session";
@@ -49,8 +50,14 @@ function coerce(field: ResourceField, raw: unknown): unknown {
 function buildData(config: (typeof RESOURCES)[string], body: Record<string, unknown>, tenantId: string) {
   const data: Record<string, unknown> = { tenantId };
   for (const field of config.fields) {
-    if (field.hidden) continue;
-    const value = coerce(field, body[field.name]);
+    let raw = body[field.name];
+    if (field.hidden) {
+      if (field.autoCode) raw = `${field.autoCode}-${randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
+      else if (field.defaultFrom) raw = body[field.defaultFrom];
+      else if (field.defaultValue !== undefined) raw = field.defaultValue;
+      else continue;
+    }
+    const value = coerce(field, raw);
     if (field.required && (value === null || value === "")) {
       throw new AppError("VALIDATION", `Missing ${field.name}`, `الحقل ${field.label.ar} مطلوب`);
     }
@@ -65,7 +72,7 @@ function whereFor(config: (typeof RESOURCES)[string], tenantId: string, branchId
     ...(config.branchScoped && branchId ? { OR: [{ branchId }, { branchId: null }] } : {}),
     ...(search ? {
       AND: [{
-        OR: config.searchFields.map((field) => ({ [field]: { contains: search, mode: "insensitive" } })),
+        OR: config.searchFields.map((field) => ({ [field]: { contains: search } })),
       }],
     } : {}),
   };

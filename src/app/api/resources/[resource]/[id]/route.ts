@@ -56,7 +56,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ resour
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
     const data: Record<string, unknown> = {};
     for (const field of config.fields) {
-      if (field.hidden || !(field.name in body)) continue;
+      if (field.hidden) {
+        if (field.defaultFrom && field.defaultFrom in body) {
+          data[field.name] = coerce(field, body[field.defaultFrom]);
+        }
+        continue;
+      }
+      if (!(field.name in body)) continue;
       const value = coerce(field, body[field.name]);
       if (field.required && (value === null || value === "")) {
         throw new AppError("VALIDATION", `Missing ${field.name}`, `الحقل ${field.label.ar} مطلوب`);

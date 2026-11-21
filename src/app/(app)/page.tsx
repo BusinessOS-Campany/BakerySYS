@@ -207,7 +207,7 @@ export default async function DashboardPage() {
               {lowStock.slice(0, 6).map((alert) => (
                 <Link
                   key={`${alert.type}-${alert.id}`}
-                  href={alert.type === "RAW" ? "/ingredients" : "/products"}
+                  href="/inventory"
                   className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] px-3 py-2 text-sm hover:bg-[var(--surface-muted)]"
                 >
                   <div className="min-w-0">

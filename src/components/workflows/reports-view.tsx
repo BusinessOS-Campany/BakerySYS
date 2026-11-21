@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, RefreshCw } from "lucide-react";
+import { Download } from "lucide-react";
 import { apiFetch, L, type Locale } from "./shared";
 import { formatDate, formatMoney } from "@/lib/i18n/dictionary";
 
@@ -29,11 +29,9 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces }: {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [provider, setProvider] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
   const money = (value: number) => formatMoney(value, locale, currency, decimalPlaces);
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError("");
     try {
       const [data, ai] = await Promise.all([
@@ -45,8 +43,6 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces }: {
       setProvider(ai.provider);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
     }
   }, [days, locale]);
 
@@ -102,9 +98,6 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces }: {
             <option value={90}>{L(locale, "90 يوم", "90 days")}</option>
             <option value={365}>{L(locale, "سنة", "1 year")}</option>
           </select>
-          <button className="btn btn-secondary" onClick={() => void load()} type="button">
-            <RefreshCw className={loading ? "h-4 w-4 spinner" : "h-4 w-4"} />
-          </button>
           {canExport ? (
             <button className="btn btn-primary" onClick={() => void exportCsv()} type="button">
               <Download className="h-4 w-4" /> {L(locale, "تصدير CSV", "Export CSV")}

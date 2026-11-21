@@ -16,7 +16,7 @@ async function rawBalance(
   });
   if (!existing) {
     if (delta < 0) {
-      throw new AppError("INSUFFICIENT_STOCK", "No stock record for ingredient", "ظ„ط§ ظٹظˆط¬ط¯ ط±طµظٹط¯ ظ„ظ‡ط°ط§ ط§ظ„ظ…ظƒظˆظ†");
+      throw new AppError("INSUFFICIENT_STOCK", "No stock record for ingredient", "لا يوجد رصيد لهذا المكون");
     }
     await tx.ingredientStock.create({
       data: { tenantId: owner.tenantId, warehouseId: owner.warehouseId, ingredientId, quantity: round(delta, 6) },
@@ -25,7 +25,7 @@ async function rawBalance(
   }
   const next = round(Number(existing.quantity) + delta, 6);
   if (next < 0) {
-    throw new AppError("INSUFFICIENT_STOCK", `Insufficient ingredient stock (${ingredientId})`, "ط§ظ„ط±طµظٹط¯ ط؛ظٹط± ظƒط§ظپظچ ظ…ظ† ط§ظ„ظ…ظƒظˆظ†");
+    throw new AppError("INSUFFICIENT_STOCK", `Insufficient ingredient stock (${ingredientId})`, "الرصيد غير كافٍ من المكون");
   }
   await tx.ingredientStock.update({
     where: { id: existing.id },
@@ -36,6 +36,7 @@ async function rawBalance(
 
 async function finishedBalance(
   tx: Db, owner: StockOwner, productId: string, variantId: string | null, delta: number,
+  allowNegative = false,
 ) {
   const existing = await tx.finishedStock.findFirst({
     where: {
@@ -45,7 +46,16 @@ async function finishedBalance(
   });
   if (!existing) {
     if (delta < 0) {
-      throw new AppError("INSUFFICIENT_STOCK", "No finished stock record", "ظ„ط§ ظٹظˆط¬ط¯ ط±طµظٹط¯ ظ…ظ† ظ‡ط°ط§ ط§ظ„ظ…ظ†طھط¬");
+      if (!allowNegative) {
+        throw new AppError("INSUFFICIENT_STOCK", "No finished stock record", "لا يوجد رصيد من هذا المنتج");
+      }
+      await tx.finishedStock.create({
+        data: {
+          tenantId: owner.tenantId, warehouseId: owner.warehouseId,
+          productId, variantId, quantity: 0,
+        },
+      });
+      return 0;
     }
     await tx.finishedStock.create({
       data: {
@@ -57,7 +67,14 @@ async function finishedBalance(
   }
   const next = round(Number(existing.quantity) + delta, 6);
   if (next < 0) {
-    throw new AppError("INSUFFICIENT_STOCK", `Insufficient finished stock (${productId})`, "ط§ظ„ط±طµظٹط¯ ط؛ظٹط± ظƒط§ظپظچ ظ…ظ† ط§ظ„ظ…ظ†طھط¬ ط§ظ„طھط§ظ…");
+    if (!allowNegative) {
+      throw new AppError("INSUFFICIENT_STOCK", `Insufficient finished stock (${productId})`, "الرصيد غير كافٍ من المنتج التام");
+    }
+    await tx.finishedStock.update({
+      where: { id: existing.id },
+      data: { quantity: 0, version: { increment: 1 } },
+    });
+    return 0;
   }
   await tx.finishedStock.update({
     where: { id: existing.id },
@@ -79,7 +96,7 @@ export async function receiveIngredient(tx: Db, input: StockOwner & {
   note?: string;
 }) {
   const qty = round(input.quantity, 6);
-  if (qty <= 0) throw new AppError("VALIDATION", "Receipt quantity must be positive", "ظƒظ…ظٹط© ط§ظ„ط§ط³طھظ„ط§ظ… ظٹط¬ط¨ ط£ظ† طھظƒظˆظ† ظ…ظˆط¬ط¨ط©");
+  if (qty <= 0) throw new AppError("VALIDATION", "Receipt quantity must be positive", "كمية الاستلام يجب أن تكون موجبة");
   const lotNumber = input.lotNumber || `LOT-${Date.now().toString(36).toUpperCase()}`;
   const lot = await tx.ingredientLot.upsert({
     where: {
@@ -143,7 +160,7 @@ export async function consumeIngredient(tx: Db, input: StockOwner & {
     const lot = await tx.ingredientLot.findFirst({
       where: { id: input.lotId, tenantId: input.tenantId, warehouseId: input.warehouseId },
     });
-    if (!lot) throw new AppError("NOT_FOUND", "Lot not found", "ط§ظ„ط¯ظپط¹ط© ط؛ظٹط± ظ…ظˆط¬ظˆط¯ط©");
+    if (!lot) throw new AppError("NOT_FOUND", "Lot not found", "الدفعة غير موجودة");
     lots = [{ id: lot.id, quantity: Number(lot.quantity), unitCost: Number(lot.unitCost), expiryDate: lot.expiryDate, receivedAt: lot.receivedAt }];
   } else {
     const rows = await tx.ingredientLot.findMany({
@@ -163,7 +180,7 @@ export async function consumeIngredient(tx: Db, input: StockOwner & {
   try {
     allocations = selectFefoLots(lots, qty);
   } catch {
-    throw new AppError("INSUFFICIENT_STOCK", `Insufficient stock for ingredient ${input.ingredientId}`, "ط§ظ„ط±طµظٹط¯ ط؛ظٹط± ظƒط§ظپظچ ظ…ظ† ط§ظ„ظ…ظƒظˆظ†");
+    throw new AppError("INSUFFICIENT_STOCK", `Insufficient stock for ingredient ${input.ingredientId}`, "الرصيد غير كافٍ من المكون");
   }
   for (const a of allocations) {
     await tx.ingredientLot.update({
@@ -202,7 +219,7 @@ export async function addFinishedStock(tx: Db, input: StockOwner & {
   const qty = round(input.quantity, 6);
   if (qty <= 0) return { balance: 0, lotId: null as string | null };
   if (input.qualityApproved === false) {
-    throw new AppError("INVALID_STATE", "Only quality-approved goods can become sellable", "ظ„ط§ ظٹظ…ظƒظ† ط¥ط¶ط§ظپط© ظ…ظ†طھط¬ط§طھ ط؛ظٹط± ظ…ط¹طھظ…ط¯ط© ظ„ظ„ظ…ط®ط²ظˆظ† ط§ظ„ظ‚ط§ط¨ظ„ ظ„ظ„ط¨ظٹط¹");
+    throw new AppError("INVALID_STATE", "Only quality-approved goods can become sellable", "لا يمكن إضافة منتجات غير معتمدة للمخزون القابل للبيع");
   }
   const lotNumber = input.lotNumber || `FG-${Date.now().toString(36).toUpperCase()}`;
   const lot = await tx.finishedLot.upsert({
@@ -247,6 +264,8 @@ export async function removeFinishedStock(tx: Db, input: StockOwner & {
   referenceId?: string;
   note?: string;
   lotId?: string | null;
+  allowNegative?: boolean;
+  fallbackUnitCost?: number;
 }) {
   const qty = round(input.quantity, 6);
   if (qty <= 0) return { cost: 0, allocations: [] as { lotId: string; quantity: number; unitCost: number }[] };
@@ -262,18 +281,33 @@ export async function removeFinishedStock(tx: Db, input: StockOwner & {
     id: l.id, quantity: Number(l.quantity), unitCost: Number(l.unitCost),
     expiryDate: l.expiryDate, receivedAt: l.producedAt,
   }));
-  let allocations;
+  let allocations: { lotId: string; quantity: number; unitCost: number }[];
   try {
     allocations = selectFefoLots(lots, qty);
   } catch {
-    throw new AppError("INSUFFICIENT_STOCK", `Insufficient stock for product ${input.productId}`, "ط§ظ„ط±طµظٹط¯ ط؛ظٹط± ظƒط§ظپظچ ظ…ظ† ط§ظ„ظ…ظ†طھط¬");
+    if (!input.allowNegative) {
+      throw new AppError("INSUFFICIENT_STOCK", `Insufficient stock for product ${input.productId}`, "الرصيد غير كافٍ من المنتج");
+    }
+    allocations = [];
+    let remaining = qty;
+    for (const lot of lots) {
+      const take = round(Math.min(remaining, lot.quantity), 6);
+      if (take <= 0) continue;
+      allocations.push({ lotId: lot.id, quantity: take, unitCost: lot.unitCost ?? 0 });
+      remaining = round(remaining - take, 6);
+    }
+    if (remaining > 0) {
+      allocations.push({ lotId: "", quantity: remaining, unitCost: input.fallbackUnitCost ?? 0 });
+    }
   }
   for (const a of allocations) {
-    await tx.finishedLot.update({ where: { id: a.lotId }, data: { quantity: { decrement: a.quantity } } });
+    if (a.lotId) {
+      await tx.finishedLot.update({ where: { id: a.lotId }, data: { quantity: { decrement: a.quantity } } });
+    }
     await tx.finishedMovement.create({
       data: {
         tenantId: input.tenantId, warehouseId: input.warehouseId,
-        productId: input.productId, variantId: input.variantId ?? null, lotId: a.lotId,
+        productId: input.productId, variantId: input.variantId ?? null, lotId: a.lotId || null,
         direction: "OUT", quantity: a.quantity, unitCost: a.unitCost,
         movementType: input.movementType ?? "SALE",
         referenceType: input.referenceType ?? null, referenceId: input.referenceId ?? null,
@@ -281,7 +315,7 @@ export async function removeFinishedStock(tx: Db, input: StockOwner & {
       },
     });
   }
-  const balance = await finishedBalance(tx, input, input.productId, input.variantId ?? null, -qty);
+  const balance = await finishedBalance(tx, input, input.productId, input.variantId ?? null, -qty, input.allowNegative);
   return { balance, allocations, cost: round(allocations.reduce((s, a) => s + a.quantity * a.unitCost, 0), 6) };
 }
 
@@ -294,7 +328,7 @@ export async function applyAdjustment(tx: Db, input: StockOwner & {
   approvedById: string;
   variantId?: string | null;
 }) {
-  if (!input.reason?.trim()) throw new AppError("VALIDATION", "Adjustment reason is required", "ط³ط¨ط¨ ط§ظ„طھط¹ط¯ظٹظ„ ظ…ط·ظ„ظˆط¨");
+  if (!input.reason?.trim()) throw new AppError("VALIDATION", "Adjustment reason is required", "سبب التعديل مطلوب");
   const adjustment = await tx.stockAdjustment.create({
     data: {
       tenantId: input.tenantId, warehouseId: input.warehouseId, itemType: input.itemType,

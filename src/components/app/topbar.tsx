@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Bell, ChevronDown, CircleUserRound, Globe2, LogOut, Menu, Moon, Sun,
+  Bell, ChevronDown, CircleUserRound, Globe2, LogOut, Menu, Moon, Search, Sun,
 } from "lucide-react";
 import { findNavItem } from "./nav";
+import { GlobalSearch } from "@/components/search/global-search";
 import { cn } from "@/lib/utils";
 import { formatDate, translate, type Locale } from "@/lib/i18n/dictionary";
 
@@ -53,7 +54,13 @@ export function Topbar({
   const currentNav = findNavItem(pathname);
 
   useEffect(() => {
-    setTheme((document.documentElement.dataset.theme as "light" | "dark") ?? "light");
+    let saved: string | null = null;
+    try { saved = localStorage.getItem("bakery_theme"); } catch {}
+    const next = saved === "dark" || saved === "light"
+      ? saved
+      : (document.documentElement.dataset.theme as "light" | "dark") ?? "light";
+    document.documentElement.dataset.theme = next;
+    setTheme(next);
   }, []);
 
   async function loadNotifications() {
@@ -78,7 +85,9 @@ export function Topbar({
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
     document.documentElement.dataset.theme = next;
-    try { localStorage.setItem("bakery_theme", next); } catch { /* ignore */ }
+    try { localStorage.setItem("bakery_theme", next); } catch {}
+    document.cookie = `bakery_theme=${next}; path=/; max-age=31536000; SameSite=Lax`;
+    router.refresh();
   }
 
   async function setPreference(patch: { branchId?: string | null; locale?: Locale }) {
@@ -128,7 +137,17 @@ export function Topbar({
         </div>
       </div>
 
+      <div className="hidden lg:block"><GlobalSearch locale={locale} /></div>
+
       <div className="flex items-center gap-1.5">
+        <Link
+          aria-label={t("globalSearch.title")}
+          className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-[var(--surface-muted)] lg:hidden"
+          href="/search"
+          title={t("globalSearch.title")}
+        >
+          <Search className="h-4 w-4" />
+        </Link>
         {(canSeeAllBranches || branches.length > 1) ? (
           <select
             aria-label={t("common.branch")}

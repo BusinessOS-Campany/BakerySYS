@@ -365,6 +365,7 @@ model Product {
   descriptionEn String?
   imageUrl      String?
   baseUnitId    String
+  piecesPerUnit Decimal  @default(1) @db.Decimal(18, 4)
   sellingPrice  Decimal  @db.Decimal(18, 4)
   costPrice     Decimal  @default(0) @db.Decimal(18, 4)
   taxRate       Decimal  @default(0) @db.Decimal(9, 4)
@@ -1370,6 +1371,24 @@ model CustomerReceivable {
   createdAt   DateTime @default(now())
   @@index([tenantId, customerId, status])
   @@map("customer_receivables")
+}
+
+model CustomerTransaction {
+  id          String   @id @default(cuid())
+  tenantId    String
+  customerId  String
+  kind        String
+  amount      Decimal  @db.Decimal(18, 4)
+  notes       String?
+  sourceType  String?
+  sourceId    String?
+  entryDate   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([tenantId, customerId, entryDate])
+  @@index([tenantId, entryDate])
+  @@index([tenantId, sourceType, sourceId])
+  @@map("customer_transactions")
 }
 
 model SupplierPayable {

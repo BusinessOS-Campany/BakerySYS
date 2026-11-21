@@ -7,19 +7,13 @@ export const metadata: Metadata = {
   description: "Bakery ERP & POS — purchasing, production, inventory, sales and accounting",
 };
 
-const themeScript = `
-try {
-  var t = localStorage.getItem('bakery_theme');
-  if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
-} catch (e) {}
-`;
-
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const store = await cookies();
   const locale = store.get("bakery_locale")?.value === "en" ? "en" : "ar";
+  const themeCookie = store.get("bakery_theme")?.value;
+  const theme = themeCookie === "dark" || themeCookie === "light" ? themeCookie : "light";
   return (
-    <html lang={locale} dir={locale === "ar" ? "rtl" : "ltr"} suppressHydrationWarning>
-      <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
+    <html lang={locale} dir={locale === "ar" ? "rtl" : "ltr"} data-theme={theme} suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );

@@ -45,20 +45,20 @@ export async function postJournal(tx: Db, input: {
         select: { id: true, active: true },
       });
       if (!account || !account.active) {
-        throw new AppError("INVALID_STATE", `Account ${line.code} is not configured`, "ط§ظ„ط­ط³ط§ط¨ ط؛ظٹط± ظ…ظڈط¹ط¯ ظپظٹ ط¯ظ„ظٹظ„ ط§ظ„ط­ط³ط§ط¨ط§طھ");
+        throw new AppError("INVALID_STATE", `Account ${line.code} is not configured`, "الحساب غير مُعدّ في دليل الحسابات");
       }
       accountId = account.id;
     }
-    if (!accountId) throw new AppError("VALIDATION", "Journal line requires an account", "ظƒظ„ ظ‚ظٹط¯ ظٹط­طھط§ط¬ ط¥ظ„ظ‰ ط­ط³ط§ط¨");
+    if (!accountId) throw new AppError("VALIDATION", "Journal line requires an account", "كل قيد يحتاج إلى حساب");
     resolved.push({ accountId, debit: Math.abs(round(line.debit ?? 0, 6)), credit: Math.abs(round(line.credit ?? 0, 6)) });
   }
-  if (resolved.length < 2) throw new AppError("VALIDATION", "A journal needs at least two lines", "ط§ظ„ظ‚ظٹط¯ ظٹط­طھط§ط¬ ط¥ظ„ظ‰ ط³ط·ط±ظٹظ† ط¹ظ„ظ‰ ط§ظ„ط£ظ‚ظ„");
+  if (resolved.length < 2) throw new AppError("VALIDATION", "A journal needs at least two lines", "القيد يحتاج إلى سطرين على الأقل");
   if (!journalBalanced(resolved)) {
     const totals = journalTotals(resolved);
     throw new AppError(
       "UNBALANCED_JOURNAL",
       `Journal is not balanced (debit ${totals.debit}, credit ${totals.credit})`,
-      "ط§ظ„ظ‚ظٹط¯ ط؛ظٹط± ظ…طھظˆط§ط²ظ† (ط§ظ„ظ…ط¯ظٹظ† ظ„ط§ ظٹط³ط§ظˆظٹ ط§ظ„ط¯ط§ط¦ظ†)",
+      "القيد غير متوازن (المدين لا يساوي الدائن)",
     );
   }
   const entryNumber = await nextNumber(tx, input.tenantId, "JV", "JV-");
@@ -90,9 +90,9 @@ export async function reverseJournal(tx: Db, input: {
   const original = await tx.journalEntry.findFirst({
     where: { id: input.entryId, tenantId: input.tenantId },
   });
-  if (!original) throw new AppError("NOT_FOUND", "Journal entry not found", "ط§ظ„ظ‚ظٹط¯ ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
+  if (!original) throw new AppError("NOT_FOUND", "Journal entry not found", "القيد غير موجود");
   if (original.status === "REVERSED") {
-    throw new AppError("INVALID_STATE", "Entry already reversed", "طھظ… ط¹ظƒط³ ط§ظ„ظ‚ظٹط¯ ظ…ط³ط¨ظ‚ط§ظ‹");
+    throw new AppError("INVALID_STATE", "Entry already reversed", "تم عكس القيد مسبقاً");
   }
   const lines = await tx.journalLine.findMany({ where: { entryId: original.id } });
   const reversal = await postJournal(tx, {

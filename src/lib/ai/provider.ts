@@ -104,7 +104,7 @@ export class LocalInsightsProvider implements AIProvider {
         title: `Review pricing for ${weakest.name}`,
         body: "This top-selling product is currently loss-making after cost allocation.",
         metric: weakest.profit,
-        link: "/recipes",
+        link: "/products",
       });
     }
     return result.slice(0, 6);

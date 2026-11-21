@@ -18,11 +18,11 @@ export async function createPurchaseOrder(tx: Db, input: {
   items: { ingredientId: string; quantity: number; unitId: string; unitPrice: number }[];
 }) {
   const supplier = await tx.supplier.findFirst({ where: { id: input.supplierId, tenantId: input.tenantId } });
-  if (!supplier) throw new AppError("NOT_FOUND", "Supplier not found", "ط§ظ„ظ…ظˆط±ط¯ ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
-  if (!input.items.length) throw new AppError("VALIDATION", "Order has no items", "ط§ظ„ط·ظ„ط¨ ظ„ط§ ظٹط­طھظˆظٹ ط¹ظ„ظ‰ ط¨ظ†ظˆط¯");
+  if (!supplier) throw new AppError("NOT_FOUND", "Supplier not found", "المورد غير موجود");
+  if (!input.items.length) throw new AppError("VALIDATION", "Order has no items", "الطلب لا يحتوي على بنود");
   const ingredientIds = [...new Set(input.items.map((i) => i.ingredientId))];
   const ingredients = await tx.ingredient.findMany({ where: { id: { in: ingredientIds }, tenantId: input.tenantId } });
-  if (ingredients.length !== ingredientIds.length) throw new AppError("NOT_FOUND", "Ingredient not found", "ط£ط­ط¯ ط§ظ„ظ…ظƒظˆظ†ط§طھ ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
+  if (ingredients.length !== ingredientIds.length) throw new AppError("NOT_FOUND", "Ingredient not found", "أحد المكونات غير موجود");
   const total = round(input.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0), 6);
   const number = await nextNumber(tx, input.tenantId, "PO", "PO-");
   const order = await tx.purchaseOrder.create({
@@ -48,8 +48,8 @@ export async function approvePurchaseOrder(tx: Db, input: {
   approvedById: string;
 }) {
   const order = await tx.purchaseOrder.findFirst({ where: { id: input.orderId, tenantId: input.tenantId } });
-  if (!order) throw new AppError("NOT_FOUND", "Order not found", "ط£ظ…ط± ط§ظ„ط´ط±ط§ط، ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
-  if (order.status !== "DRAFT") throw new AppError("INVALID_STATE", "Only draft orders can be approved", "ظٹظ…ظƒظ† ط§ط¹طھظ…ط§ط¯ ط§ظ„ط·ظ„ط¨ط§طھ ط§ظ„ظ…ط³ظˆط¯ط© ظپظ‚ط·");
+  if (!order) throw new AppError("NOT_FOUND", "Order not found", "أمر الشراء غير موجود");
+  if (order.status !== "DRAFT") throw new AppError("INVALID_STATE", "Only draft orders can be approved", "يمكن اعتماد الطلبات المسودة فقط");
   return tx.purchaseOrder.update({
     where: { id: order.id }, data: { status: "APPROVED", approvedById: input.approvedById },
   });
@@ -77,12 +77,12 @@ export async function receiveGoods(tx: Db, input: {
     expiryDate?: Date | null;
   }[];
 }) {
-  if (!input.items.length) throw new AppError("VALIDATION", "Receipt has no items", "ط§ظ„ط¥ظٹطµط§ظ„ ظ„ط§ ظٹط­طھظˆظٹ ط¹ظ„ظ‰ ط¨ظ†ظˆط¯");
+  if (!input.items.length) throw new AppError("VALIDATION", "Receipt has no items", "الإيصال لا يحتوي على بنود");
   let order = null as Awaited<ReturnType<typeof tx.purchaseOrder.findFirst>>;
   if (input.orderId) {
     order = await tx.purchaseOrder.findFirst({ where: { id: input.orderId, tenantId: input.tenantId } });
-    if (!order) throw new AppError("NOT_FOUND", "Purchase order not found", "ط£ظ…ط± ط§ظ„ط´ط±ط§ط، ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
-    if (order.status === "CANCELLED") throw new AppError("INVALID_STATE", "Order cancelled", "طھظ… ط¥ظ„ط؛ط§ط، ط§ظ„ط·ظ„ط¨");
+    if (!order) throw new AppError("NOT_FOUND", "Purchase order not found", "أمر الشراء غير موجود");
+    if (order.status === "CANCELLED") throw new AppError("INVALID_STATE", "Order cancelled", "تم إلغاء الطلب");
   }
   const number = await nextNumber(tx, input.tenantId, "GRN", "GRN-");
   const receipt = await tx.goodsReceipt.create({
@@ -98,7 +98,7 @@ export async function receiveGoods(tx: Db, input: {
     const ingredient = await tx.ingredient.findFirst({
       where: { id: item.ingredientId, tenantId: input.tenantId },
     });
-    if (!ingredient) throw new AppError("NOT_FOUND", "Ingredient not found", "ط£ط­ط¯ ط§ظ„ظ…ظƒظˆظ†ط§طھ ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
+    if (!ingredient) throw new AppError("NOT_FOUND", "Ingredient not found", "أحد المكونات غير موجود");
     const accepted = round(item.acceptedQuantity ?? item.quantity, 6);
     const rejected = round(item.rejectedQuantity ?? 0, 6);
     if (accepted <= 0) continue;
@@ -161,8 +161,8 @@ export async function receiveGoods(tx: Db, input: {
   });
   await notify(tx, {
     tenantId: input.tenantId,
-    titleAr: "طھظ… ط§ط³طھظ„ط§ظ… ط¨ط¶ط§ط¹ط©", titleEn: "Goods received",
-    bodyAr: `ط¥ظٹطµط§ظ„ ${number} ط¨ظ‚ظٹظ…ط© ${total}`, bodyEn: `Receipt ${number} worth ${total}`,
+    titleAr: "تم استلام بضاعة", titleEn: "Goods received",
+    bodyAr: `إيصال ${number} بقيمة ${total}`, bodyEn: `Receipt ${number} worth ${total}`,
     kind: "PURCHASING", link: `/purchases/${receipt.id}`,
   });
   return { receipt: updatedReceipt, payable, total };
@@ -179,9 +179,9 @@ export async function paySupplier(tx: Db, input: {
   recordedBy: string;
 }) {
   const supplier = await tx.supplier.findFirst({ where: { id: input.supplierId, tenantId: input.tenantId } });
-  if (!supplier) throw new AppError("NOT_FOUND", "Supplier not found", "ط§ظ„ظ…ظˆط±ط¯ ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
+  if (!supplier) throw new AppError("NOT_FOUND", "Supplier not found", "المورد غير موجود");
   const amount = round(input.amount, 6);
-  if (amount <= 0) throw new AppError("VALIDATION", "Payment must be positive", "ط§ظ„ظ…ط¨ظ„ط؛ ظٹط¬ط¨ ط£ظ† ظٹظƒظˆظ† ظ…ظˆط¬ط¨ط§ظ‹");
+  if (amount <= 0) throw new AppError("VALIDATION", "Payment must be positive", "المبلغ يجب أن يكون موجباً");
   const payment = await tx.supplierPayment.create({
     data: {
       tenantId: input.tenantId, supplierId: input.supplierId, invoiceId: input.invoiceId ?? null,
@@ -196,7 +196,7 @@ export async function paySupplier(tx: Db, input: {
     const invoice = await tx.supplierInvoice.findFirst({
       where: { id: input.invoiceId, tenantId: input.tenantId },
     });
-    if (!invoice) throw new AppError("NOT_FOUND", "Supplier invoice not found", "ظپط§طھظˆط±ط© ط§ظ„ظ…ظˆط±ط¯ ط؛ظٹط± ظ…ظˆط¬ظˆط¯ط©");
+    if (!invoice) throw new AppError("NOT_FOUND", "Supplier invoice not found", "فاتورة المورد غير موجودة");
     const newPaid = Number(invoice.paidAmount) + amount;
     await tx.supplierInvoice.update({
       where: { id: invoice.id },

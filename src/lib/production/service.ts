@@ -20,15 +20,15 @@ export async function createProductionPlan(tx: Db, input: {
   createdById: string;
 }) {
   const product = await tx.product.findFirst({ where: { id: input.productId, tenantId: input.tenantId } });
-  if (!product) throw new AppError("NOT_FOUND", "Product not found", "ط§ظ„ظ…ظ†طھط¬ ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
+  if (!product) throw new AppError("NOT_FOUND", "Product not found", "المنتج غير موجود");
   const recipe = await tx.recipe.findFirst({ where: { productId: input.productId, tenantId: input.tenantId, active: true } });
-  if (!recipe) throw new AppError("INVALID_STATE", "Product has no active recipe", "ظ„ط§ طھظˆط¬ط¯ ظˆطµظپط© ظ†ط´ط·ط© ظ„ظ‡ط°ط§ ط§ظ„ظ…ظ†طھط¬");
+  if (!recipe) throw new AppError("INVALID_STATE", "Product has no active recipe", "لا توجد وصفة نشطة لهذا المنتج");
   const versionId = input.recipeVersionId
     ?? (await tx.recipeVersion.findFirst({
         where: { recipeId: recipe.id, version: recipe.currentVersion },
         select: { id: true },
       }))?.id;
-  if (!versionId) throw new AppError("NOT_FOUND", "Recipe version not found", "ظ†ط³ط®ط© ط§ظ„ظˆطµظپط© ط؛ظٹط± ظ…ظˆط¬ظˆط¯ط©");
+  if (!versionId) throw new AppError("NOT_FOUND", "Recipe version not found", "نسخة الوصفة غير موجودة");
 
   const multiplier = round(Number(input.plannedQuantity) / (Number(recipe.yieldQuantity) || 1), 8);
   const requirements = await recipeRequirements(tx, input.tenantId, versionId, multiplier);
@@ -63,8 +63,8 @@ export async function approveProductionPlan(tx: Db, input: {
   approvedById: string;
 }) {
   const plan = await tx.productionPlan.findFirst({ where: { id: input.planId, tenantId: input.tenantId } });
-  if (!plan) throw new AppError("NOT_FOUND", "Plan not found", "ط®ط·ط© ط§ظ„ط¥ظ†طھط§ط¬ ط؛ظٹط± ظ…ظˆط¬ظˆط¯ط©");
-  if (plan.status !== "PLANNED") throw new AppError("INVALID_STATE", "Only planned orders can be approved", "ظٹظ…ظƒظ† ط§ط¹طھظ…ط§ط¯ ط§ظ„ط®ط·ط· ط§ظ„ظ…ط®ط·ط·ط© ظپظ‚ط·");
+  if (!plan) throw new AppError("NOT_FOUND", "Plan not found", "خطة الإنتاج غير موجودة");
+  if (plan.status !== "PLANNED") throw new AppError("INVALID_STATE", "Only planned orders can be approved", "يمكن اعتماد الخطط المخططة فقط");
   return tx.productionPlan.update({
     where: { id: plan.id },
     data: { status: "APPROVED", approvedById: input.approvedById },
@@ -86,14 +86,14 @@ export async function createBatch(tx: Db, input: {
   const recipe = await tx.recipe.findFirst({
     where: { tenantId: input.tenantId, productId: input.productId, active: true },
   });
-  if (!recipe) throw new AppError("INVALID_STATE", "No active recipe", "ظ„ط§ طھظˆط¬ط¯ ظˆطµظپط© ظ†ط´ط·ط©");
+  if (!recipe) throw new AppError("INVALID_STATE", "No active recipe", "لا توجد وصفة نشطة");
   const plan = input.planId
     ? await tx.productionPlan.findFirst({ where: { id: input.planId, tenantId: input.tenantId } })
     : null;
   const version = await tx.recipeVersion.findFirst({
     where: { recipeId: recipe.id, version: recipe.currentVersion },
   });
-  if (!version) throw new AppError("NOT_FOUND", "Recipe version not found", "ظ†ط³ط®ط© ط§ظ„ظˆطµظپط© ط؛ظٹط± ظ…ظˆط¬ظˆط¯ط©");
+  if (!version) throw new AppError("NOT_FOUND", "Recipe version not found", "نسخة الوصفة غير موجودة");
   let snapshot = await latestSnapshot(tx, input.tenantId, recipe.id);
   if (!snapshot) {
     const recalculated = await recalculateRecipeCost(tx, input.tenantId, recipe.id);
@@ -143,10 +143,10 @@ export async function completeBatch(tx: Db, input: {
   actuals?: Record<string, number>; // ingredientId -> consumed base quantity
 }) {
   const batch = await tx.productionBatch.findFirst({ where: { id: input.batchId, tenantId: input.tenantId } });
-  if (!batch) throw new AppError("NOT_FOUND", "Batch not found", "ط¯ظپط¹ط© ط§ظ„ط¥ظ†طھط§ط¬ ط؛ظٹط± ظ…ظˆط¬ظˆط¯ط©");
-  if (batch.status === "COMPLETED") throw new AppError("INVALID_STATE", "Batch already completed", "طھظ… ط¥ظ†ظ‡ط§ط، ط§ظ„ط¯ظپط¹ط© ظ…ط³ط¨ظ‚ط§ظ‹");
+  if (!batch) throw new AppError("NOT_FOUND", "Batch not found", "دفعة الإنتاج غير موجودة");
+  if (batch.status === "COMPLETED") throw new AppError("INVALID_STATE", "Batch already completed", "تم إنهاء الدفعة مسبقاً");
   if (["CANCELLED", "REJECTED"].includes(batch.status)) {
-    throw new AppError("INVALID_STATE", "Batch is not active", "ط§ظ„ط¯ظپط¹ط© ط؛ظٹط± ظ†ط´ط·ط©");
+    throw new AppError("INVALID_STATE", "Batch is not active", "الدفعة غير نشطة");
   }
   const inspection = await tx.qualityInspection.findFirst({
     where: { tenantId: input.tenantId, referenceType: "BATCH", referenceId: batch.id },
@@ -156,10 +156,10 @@ export async function completeBatch(tx: Db, input: {
     throw new AppError(
       "INVALID_STATE",
       "Quality approval is required before completion",
-      "ظٹط¬ط¨ ط§ط¹طھظ…ط§ط¯ ط§ظ„ط¬ظˆط¯ط© ظ‚ط¨ظ„ ط¥ظ†ظ‡ط§ط، ط§ظ„ط¯ظپط¹ط©",
+      "يجب اعتماد الجودة قبل إنهاء الدفعة",
     );
   }
-  if (!batch.recipeVersionId) throw new AppError("INVALID_STATE", "Batch has no recipe version", "ط§ظ„ط¯ظپط¹ط© ط؛ظٹط± ظ…ط±طھط¨ط·ط© ط¨ظˆطµظپط©");
+  if (!batch.recipeVersionId) throw new AppError("INVALID_STATE", "Batch has no recipe version", "الدفعة غير مرتبطة بوصفة");
   const recipeVersion = await tx.recipeVersion.findFirst({
     where: { id: batch.recipeVersionId, tenantId: input.tenantId },
   });
@@ -181,7 +181,7 @@ export async function completeBatch(tx: Db, input: {
   let totalConsumedCost = 0;
   for (const line of lines) {
     const ingredient = ingredientMap.get(line.ingredientId);
-    if (!ingredient) throw new AppError("NOT_FOUND", "Ingredient missing", "ط£ط­ط¯ ط§ظ„ظ…ظƒظˆظ†ط§طھ ط؛ظٹط± ظ…ظˆط¬ظˆط¯");
+    if (!ingredient) throw new AppError("NOT_FOUND", "Ingredient missing", "أحد المكونات غير موجود");
     const scaled = round(Number(line.quantity) * scale, 6);
     const baseQty = await toBaseQuantity(tx, input.tenantId, ingredient, line.unitId, scaled);
     const finalQty = round(input.actuals?.[ingredient.id] ?? baseQty, 6);
@@ -205,7 +205,7 @@ export async function completeBatch(tx: Db, input: {
   const rejected = round(input.rejectedQuantity ?? 0, 6);
   const waste = round(input.wasteQuantity ?? 0, 6);
   const goodQty = round(Number(input.actualQuantity) - rejected - waste, 6);
-  if (goodQty <= 0) throw new AppError("VALIDATION", "No approved output to stock", "ظ„ط§ ظٹظˆط¬ط¯ ظ†ط§طھط¬ ظ…ط¹طھظ…ط¯ ظ„ط¥ط¶ط§ظپطھظ‡ ظ„ظ„ظ…ط®ط²ظˆظ†");
+  if (goodQty <= 0) throw new AppError("VALIDATION", "No approved output to stock", "لا يوجد ناتج معتمد لإضافته للمخزون");
   const yieldInfo = productionYield({
     planned: Number(batch.plannedQuantity), actual: Number(input.actualQuantity), rejected, waste,
   });
@@ -268,10 +268,10 @@ export async function completeBatch(tx: Db, input: {
   }
   await notify(tx, {
     tenantId: input.tenantId,
-    titleAr: "ط§ظƒطھظ…ظ„طھ ط¯ظپط¹ط© ط§ظ„ط¥ظ†طھط§ط¬",
+    titleAr: "اكتملت دفعة الإنتاج",
     titleEn: "Production batch completed",
     bodyEn: `${batch.batchNumber}: ${goodQty} units`,
-    bodyAr: `${batch.batchNumber}: ${goodQty} ظˆط­ط¯ط©`,
+    bodyAr: `${batch.batchNumber}: ${goodQty} وحدة`,
     kind: "PRODUCTION", link: `/production/${batch.id}`,
   });
   return { batch: updated, goodQuantity: goodQty, unitCost, cost: totalConsumedCost, lotId: output.lotId };
@@ -279,7 +279,7 @@ export async function completeBatch(tx: Db, input: {
 
 export async function getBatchDetails(tx: Db, tenantId: string, batchId: string) {
   const batch = await tx.productionBatch.findFirst({ where: { id: batchId, tenantId } });
-  if (!batch) throw new AppError("NOT_FOUND", "Batch not found", "ط¯ظپط¹ط© ط§ظ„ط¥ظ†طھط§ط¬ ط؛ظٹط± ظ…ظˆط¬ظˆط¯ط©");
+  if (!batch) throw new AppError("NOT_FOUND", "Batch not found", "دفعة الإنتاج غير موجودة");
   const [lines, employees, inspections, stages] = await Promise.all([
     tx.productionBatchIngredient.findMany({ where: { batchId } }),
     tx.productionBatchEmployee.findMany({ where: { batchId } }),

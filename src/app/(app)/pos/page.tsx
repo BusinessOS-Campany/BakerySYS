@@ -53,11 +53,6 @@ export default async function PosPage() {
     }),
   ]);
 
-  const stocks = await db.finishedStock.findMany({
-    where: { tenantId: auth.user.tenantId, warehouseId: { in: warehouses.map((w) => w.id) } },
-    select: { warehouseId: true, productId: true, quantity: true },
-  });
-
   return (
     <PosScreen
       locale={auth.locale}
@@ -68,7 +63,7 @@ export default async function PosPage() {
       defaultBranchId={auth.branchId ?? branches[0]?.id ?? null}
       canOpenSession={auth.permissions.has("pos.open") || auth.roles.includes("OWNER")}
       canCloseSession={auth.permissions.has("pos.close") || auth.roles.includes("OWNER")}
-      data={serialize({ products, warehouses, branches, customers, registers, stocks, openSession }) as unknown as PosData}
+      data={serialize({ products, warehouses, branches, customers, registers, openSession }) as unknown as PosData}
     />
   );
 }

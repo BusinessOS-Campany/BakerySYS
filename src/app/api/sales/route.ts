@@ -35,7 +35,7 @@ export const GET = apiRoute({
     const where = {
       tenantId: auth.user.tenantId,
       ...(auth.branchId ? { branchId: auth.branchId } : {}),
-      ...(search ? { invoiceNumber: { contains: search, mode: "insensitive" as const } } : {}),
+      ...(search ? { invoiceNumber: { contains: search } } : {}),
     };
     const [items, total] = await Promise.all([
       db.sale.findMany({ where, orderBy: { invoiceDate: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),

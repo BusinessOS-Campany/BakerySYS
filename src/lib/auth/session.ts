@@ -177,14 +177,14 @@ export async function getAuth(): Promise<AuthContext | null> {
 
 export async function requireAuth(): Promise<AuthContext> {
   const auth = await getAuth();
-  if (!auth) throw new AppError("UNAUTHENTICATED", "Sign in required", "ظٹط¬ط¨ طھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„");
+  if (!auth) throw new AppError("UNAUTHENTICATED", "Sign in required", "يجب تسجيل الدخول");
   return auth;
 }
 
 export async function requirePermission(code: string): Promise<AuthContext> {
   const auth = await requireAuth();
   if (!auth.permissions.has(code) && !auth.roles.includes("OWNER")) {
-    throw new AppError("FORBIDDEN", `Missing permission: ${code}`, "ظ„ظٹط³ ظ„ط¯ظٹظƒ طµظ„ط§ط­ظٹط© ظ„طھظ†ظپظٹط° ظ‡ط°ط§ ط§ظ„ط¥ط¬ط±ط§ط،");
+    throw new AppError("FORBIDDEN", `Missing permission: ${code}`, "ليس لديك صلاحية لتنفيذ هذا الإجراء");
   }
   return auth;
 }
@@ -193,6 +193,6 @@ export async function requirePermission(code: string): Promise<AuthContext> {
 export function assertBranchAccess(auth: AuthContext, branchId: string | null | undefined): void {
   if (!branchId || auth.branchIds.length === 0) return;
   if (!auth.branchIds.includes(branchId)) {
-    throw new AppError("FORBIDDEN", "Branch access denied", "ظ„ظٹط³ ظ„ط¯ظٹظƒ طµظ„ط§ط­ظٹط© ظ„ظ‡ط°ط§ ط§ظ„ظپط±ط¹");
+    throw new AppError("FORBIDDEN", "Branch access denied", "ليس لديك صلاحية لهذا الفرع");
   }
 }
