@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  apiFetch, DataPanel, FieldInput, L, statusBadge, useList, useLookups, lookupOptions, type Locale,
+  apiFetch, DataPanel, FieldInput, L, statusBadge, useList, useLookups, lookupOptions, numericLocale, type Locale,
 } from "./shared";
 
 type InspectionRow = {
@@ -64,7 +64,7 @@ export function QualityPage({ locale, canManage }: { locale: Locale; canManage: 
         refreshKey={refresh}
         canManage={canManage}
         columns={[
-          { key: "checkedAt", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.checkedAt).toLocaleString(locale) },
+          { key: "checkedAt", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.checkedAt).toLocaleString(numericLocale(locale)) },
           { key: "checkType", label: L(locale, "نوع الفحص", "Check") },
           { key: "referenceType", label: L(locale, "المرجع", "Reference"), render: (row) => `${row.referenceType}${row.referenceId ? ` · ${String(row.referenceId).slice(0, 6)}` : ""}` },
           { key: "actualResult", label: L(locale, "النتيجة الفعلية", "Actual"), render: (row) => row.actualResult ?? "—" },
@@ -127,7 +127,7 @@ export function QualityPage({ locale, canManage }: { locale: Locale; canManage: 
         rows={temperatures.rows}
         loading={temperatures.loading}
         columns={[
-          { key: "recordedAt", label: L(locale, "الوقت", "Time"), render: (row) => new Date(row.recordedAt).toLocaleString(locale) },
+          { key: "recordedAt", label: L(locale, "الوقت", "Time"), render: (row) => new Date(row.recordedAt).toLocaleString(numericLocale(locale)) },
           { key: "location", label: L(locale, "الموقع", "Location"), render: (row) => row.location ?? "—" },
           { key: "temperature", label: L(locale, "الحرارة", "Temperature") },
           { key: "note", label: L(locale, "ملاحظة", "Note"), render: (row) => row.note ?? "—" },

@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDate, formatNumber, type Locale } from "@/lib/i18n/dictionary";
+import { formatDate, formatNumber, numericLocale, type Locale } from "@/lib/i18n/dictionary";
 
 export type { Locale };
+export { numericLocale };
 
 export const L = (locale: Locale, ar: string, en: string) => (locale === "ar" ? ar : en);
 

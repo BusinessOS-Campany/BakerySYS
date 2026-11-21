@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  ActionForm, apiSend, DataPanel, L, LineItemsEditor, lookupLabel, lookupOptions, statusBadge,
+  ActionForm, apiSend, DataPanel, L, LineItemsEditor, lookupLabel, lookupOptions, numericLocale, statusBadge,
   useList, useLookups, type LineItem, type Locale,
 } from "./shared";
 
@@ -66,7 +66,7 @@ export function PurchasesPage({ locale, canManage, canApprove }: { locale: Local
         columns={[
           { key: "orderNumber", label: L(locale, "رقم الأمر", "Order") },
           { key: "supplierName", label: L(locale, "المورد", "Supplier") },
-          { key: "expectedDate", label: L(locale, "المتوقع", "Expected"), render: (row) => row.expectedDate ? new Date(row.expectedDate).toLocaleDateString(locale) : "—" },
+          { key: "expectedDate", label: L(locale, "المتوقع", "Expected"), render: (row) => row.expectedDate ? new Date(row.expectedDate).toLocaleDateString(numericLocale(locale)) : "—" },
           { key: "total", label: L(locale, "الإجمالي", "Total") },
           { key: "status", label: L(locale, "الحالة", "Status"), render: (row) => statusBadge(row.status, locale) },
         ]}
@@ -135,7 +135,7 @@ export function PurchasesPage({ locale, canManage, canApprove }: { locale: Local
         columns={[
           { key: "receiptNumber", label: L(locale, "رقم الإيصال", "Receipt") },
           { key: "supplierName", label: L(locale, "المورد", "Supplier") },
-          { key: "receivedAt", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.receivedAt).toLocaleDateString(locale) },
+          { key: "receivedAt", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.receivedAt).toLocaleDateString(numericLocale(locale)) },
           { key: "total", label: L(locale, "القيمة", "Value") },
           { key: "payable", label: L(locale, "المستحق", "Payable"), render: (row) => row.payable ? `${Number(row.payable.amount) - Number(row.payable.settled)}` : "—" },
           { key: "status", label: L(locale, "الحالة", "Status"), render: (row) => statusBadge(row.payable?.status ?? row.status, locale) },

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  ActionForm, apiSend, DataPanel, L, LineItemsEditor, lookupOptions, statusBadge, useList, useLookups,
+  ActionForm, apiSend, DataPanel, L, LineItemsEditor, lookupOptions, numericLocale, statusBadge, useList, useLookups,
   type LineItem, type Locale,
 } from "./shared";
 
@@ -63,7 +63,7 @@ export function OrdersPage({ locale, canManage }: { locale: Locale; canManage: b
         columns={[
           { key: "orderNumber", label: L(locale, "رقم الطلب", "Order") },
           { key: "customerName", label: L(locale, "العميل", "Customer"), render: (row) => row.customerName || row.customerPhone || "—" },
-          { key: "requestedPickup", label: L(locale, "الاستلام", "Pickup"), render: (row) => row.requestedPickup ? new Date(row.requestedPickup).toLocaleString(locale) : "—" },
+          { key: "requestedPickup", label: L(locale, "الاستلام", "Pickup"), render: (row) => row.requestedPickup ? new Date(row.requestedPickup).toLocaleString(numericLocale(locale)) : "—" },
           { key: "total", label: L(locale, "الإجمالي", "Total") },
           { key: "depositAmount", label: L(locale, "العربون", "Deposit") },
           { key: "status", label: L(locale, "الحالة", "Status"), render: (row) => statusBadge(row.status, locale) },

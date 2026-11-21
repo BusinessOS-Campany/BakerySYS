@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import {
-  apiSend, DataPanel, FieldInput, L, lookupLabel, lookupOptions, statusBadge, useList, useLookups,
+  apiSend, DataPanel, FieldInput, L, lookupLabel, lookupOptions, numericLocale, statusBadge, useList, useLookups,
   type Field, type FormValues, type Locale,
 } from "./shared";
 
@@ -62,7 +62,7 @@ export function ProductionPage({ locale, canManage, canComplete }: { locale: Loc
           { key: "planNumber", label: L(locale, "رقم الخطة", "Plan") },
           { key: "productId", label: L(locale, "المنتج", "Product"), render: (row) => lookupLabel(lookups.products ?? [], row.productId, locale) },
           { key: "plannedQuantity", label: L(locale, "الكمية", "Quantity") },
-          { key: "plannedDate", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.plannedDate).toLocaleDateString(locale) },
+          { key: "plannedDate", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.plannedDate).toLocaleDateString(numericLocale(locale)) },
           { key: "priority", label: L(locale, "الأولوية", "Priority") },
           { key: "status", label: L(locale, "الحالة", "Status"), render: (row) => statusBadge(row.status, locale) },
         ]}

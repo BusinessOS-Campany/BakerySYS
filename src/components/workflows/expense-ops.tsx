@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  apiSend, DataPanel, L, lookupOptions, statusBadge, useList, useLookups, type Locale,
+  apiSend, DataPanel, L, lookupOptions, numericLocale, statusBadge, useList, useLookups, type Locale,
 } from "./shared";
 
 type ExpenseRow = {
@@ -44,7 +44,7 @@ export function ExpensesPage({ locale, canManage }: { locale: Locale; canManage:
         canManage={canManage}
         columns={[
           { key: "expenseNumber", label: L(locale, "رقم المصروف", "Expense") },
-          { key: "expenseDate", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.expenseDate).toLocaleDateString(locale) },
+          { key: "expenseDate", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.expenseDate).toLocaleDateString(numericLocale(locale)) },
           { key: "categoryName", label: L(locale, "التصنيف", "Category"), render: (row) => row.categoryName ?? "—" },
           { key: "vendor", label: L(locale, "الجهة", "Vendor"), render: (row) => row.vendor ?? "—" },
           { key: "amount", label: L(locale, "المبلغ", "Amount") },

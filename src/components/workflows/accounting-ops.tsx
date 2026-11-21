@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  apiSend, DataPanel, L, lookupOptions, statusBadge, useList, useLookups, type Locale,
+  apiSend, DataPanel, L, lookupOptions, numericLocale, statusBadge, useList, useLookups, type Locale,
 } from "./shared";
 
 type JournalRow = {
@@ -45,7 +45,7 @@ export function AccountingPage({ locale, canManage }: { locale: Locale; canManag
         canManage={canManage}
         columns={[
           { key: "entryNumber", label: L(locale, "رقم القيد", "Entry") },
-          { key: "date", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.date).toLocaleDateString(locale) },
+          { key: "date", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.date).toLocaleDateString(numericLocale(locale)) },
           { key: "description", label: L(locale, "البيان", "Description") },
           { key: "debit", label: L(locale, "مدين", "Debit"), render: (row) => row.lines.reduce((sum, line) => sum + Number(line.debit), 0).toFixed(2) },
           { key: "credit", label: L(locale, "دائن", "Credit"), render: (row) => row.lines.reduce((sum, line) => sum + Number(line.credit), 0).toFixed(2) },

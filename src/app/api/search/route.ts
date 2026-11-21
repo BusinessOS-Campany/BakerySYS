@@ -2,6 +2,7 @@ import { z } from "zod";
 import { apiRoute } from "@/lib/http";
 import { db } from "@/lib/db";
 import type { SearchGroup, SearchPayload, SearchResult } from "@/lib/search/types";
+import { numericLocale } from "@/lib/i18n/dictionary";
 
 const contains = (value: string) => ({ contains: value });
 const href = (path: string, query: string) => `${path}?search=${encodeURIComponent(query)}`;
@@ -118,7 +119,7 @@ export const GET = apiRoute<unknown, SearchPayload>({
         results: rows.map((row): SearchResult => ({
           id: row.id,
           label: row.invoiceNumber,
-          subtitle: row.notes || row.invoiceDate.toLocaleDateString(auth.locale),
+          subtitle: row.notes || row.invoiceDate.toLocaleDateString(numericLocale(auth.locale)),
           href: href("/sales", q),
         })),
       })));

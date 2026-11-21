@@ -390,6 +390,10 @@ export function translate(locale: Locale, key: string, vars?: Record<string, str
   return text;
 }
 
+export function numericLocale(locale: Locale): string {
+  return locale === "ar" ? "ar-YE-u-nu-latn" : "en-US";
+}
+
 const currencySymbols: Record<string, { ar: string; en: string }> = {
   YER: { ar: "ر.ي.", en: "YER" },
   SAR: { ar: "ر.س.", en: "SAR" },
@@ -413,7 +417,8 @@ export function formatMoney(value: number | string, locale: Locale, currency: st
 
 export function formatDate(value: Date | string, locale: Locale, withTime = false): string {
   const d = typeof value === "string" ? new Date(value) : value;
-  return new Intl.DateTimeFormat(locale === "ar" ? "ar-YE" : "en-GB", {
+  return new Intl.DateTimeFormat(numericLocale(locale), {
+    numberingSystem: "latn",
     year: "numeric", month: "short", day: "numeric",
     ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
   }).format(d);
@@ -421,7 +426,8 @@ export function formatDate(value: Date | string, locale: Locale, withTime = fals
 
 export function formatNumber(value: number | string, locale: Locale, dp = 2): string {
   const n = typeof value === "string" ? Number(value) : value;
-  return new Intl.NumberFormat(locale === "ar" ? "ar-YE" : "en-US", {
+  return new Intl.NumberFormat(numericLocale(locale), {
+    numberingSystem: "latn",
     minimumFractionDigits: dp, maximumFractionDigits: dp,
   }).format(Number.isFinite(n) ? n : 0);
 }

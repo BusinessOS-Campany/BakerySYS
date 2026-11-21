@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import {
-  apiFetch, apiSend, DataPanel, FieldInput, L, lookupOptions, type Field, type FormValues, type Locale,
+  apiFetch, apiSend, DataPanel, FieldInput, L, lookupOptions, numericLocale, type Field, type FormValues, type Locale,
 } from "./shared";
 
 type UserRow = {
@@ -81,7 +81,7 @@ export function UsersPage({ locale, canManage }: { locale: Locale; canManage: bo
           { key: "phone", label: L(locale, "الهاتف", "Phone"), render: (row) => row.phone ?? "—" },
           { key: "locale", label: L(locale, "اللغة", "Language") },
           { key: "active", label: L(locale, "الحالة", "Status"), render: (row) => row.active ? L(locale, "نشط", "Active") : L(locale, "معطل", "Inactive") },
-          { key: "lastLoginAt", label: L(locale, "آخر دخول", "Last login"), render: (row) => row.lastLoginAt ? new Date(row.lastLoginAt).toLocaleDateString(locale) : "—" },
+          { key: "lastLoginAt", label: L(locale, "آخر دخول", "Last login"), render: (row) => row.lastLoginAt ? new Date(row.lastLoginAt).toLocaleDateString(numericLocale(locale)) : "—" },
         ]}
         form={{
           title: L(locale, "مستخدم جديد", "New user"),

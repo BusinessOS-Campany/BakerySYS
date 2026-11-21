@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   apiFetch, apiSend, DataPanel, FieldInput, L, LineItemsEditor, lookupLabel, lookupOptions,
-  statusBadge, useList, useLookups, type Field, type LineItem, type Locale,
+  numericLocale, statusBadge, useList, useLookups, type Field, type LineItem, type Locale,
 } from "./shared";
 
 type StockRow = {
@@ -155,7 +155,7 @@ export function InventoryPage({ locale, canManage }: { locale: Locale; canManage
         reload={reload}
         canManage={canManage}
         columns={[
-          { key: "createdAt", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.createdAt).toLocaleString(locale) },
+          { key: "createdAt", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.createdAt).toLocaleString(numericLocale(locale)) },
           { key: "itemType", label: L(locale, "النوع", "Type") },
           { key: "itemId", label: L(locale, "الصنف", "Item"), render: (row) => itemName(row.itemType, row.itemId) },
           { key: "quantity", label: L(locale, "الكمية", "Quantity"), render: (row) => Number(row.quantity) > 0 ? `+${row.quantity}` : String(row.quantity) },
@@ -201,7 +201,7 @@ export function InventoryPage({ locale, canManage }: { locale: Locale; canManage
         canManage={canManage}
         columns={[
           { key: "countNumber", label: L(locale, "رقم الجرد", "Count") },
-          { key: "countDate", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.countDate).toLocaleDateString(locale) },
+          { key: "countDate", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.countDate).toLocaleDateString(numericLocale(locale)) },
           { key: "itemType", label: L(locale, "النوع", "Type") },
           { key: "lines", label: L(locale, "البنود", "Lines"), render: (row) => row.lines?.length ?? 0 },
           { key: "status", label: L(locale, "الحالة", "Status"), render: (row) => statusBadge(row.status, locale) },
@@ -332,7 +332,7 @@ export function InventoryPage({ locale, canManage }: { locale: Locale; canManage
             <tbody>
               {movements.rows.slice(0, 50).map((movement) => (
                 <tr key={movement.id}>
-                  <td>{new Date(movement.createdAt).toLocaleString(locale)}</td>
+                  <td>{new Date(movement.createdAt).toLocaleString(numericLocale(locale))}</td>
                   <td>{movement.reference || "—"}</td>
                   <td>{movement.direction}</td>
                   <td>{String(movement.quantity)}</td>
