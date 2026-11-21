@@ -42,7 +42,6 @@ export function ArapPage({
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState({ customerId: "", kind: "DEBT", amount: "", notes: "" });
-  const tableRef = useRef<HTMLElement | null>(null);
   const detailRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -211,9 +210,9 @@ export function ArapPage({
 
       {formError ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{formError}</p> : null}
 
-      <div className={standalone ? "grid min-w-0 grid-cols-1 gap-4" : "grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.5fr)]"}>
+      <div className="grid min-w-0 grid-cols-1 gap-4">
         {standalone ? null : (
-        <section className="card min-w-0 overflow-hidden p-3 sm:p-4" ref={tableRef}>
+        <section className="card min-w-0 overflow-hidden p-3 sm:p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold">{L(locale, "العملاء", "Customers")}</h2>
             <span className="muted text-[11px] sm:text-xs">
@@ -295,20 +294,16 @@ export function ArapPage({
         </section>
         )}
 
+        {standalone ? (
         <section className="card min-w-0 overflow-hidden p-3 sm:p-4" ref={detailRef}>
           {selectedCustomer ? (
             <div className="space-y-3">
               <button
-                className={standalone ? "btn btn-secondary text-xs sm:text-sm" : "btn btn-secondary w-full text-xs sm:hidden"}
-                onClick={() => {
-                  if (standalone) router.push("/arap");
-                  else tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }}
+                className="btn btn-secondary text-xs sm:text-sm"
+                onClick={() => router.push("/arap")}
                 type="button"
               >
-                {standalone
-                  ? L(locale, "العودة إلى الأجل والمدفوعات", "Back to due & payments")
-                  : L(locale, "العودة إلى العملاء", "Back to customers")}
+                {L(locale, "العودة إلى الأجل والمدفوعات", "Back to due & payments")}
               </button>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -377,6 +372,7 @@ export function ArapPage({
             </div>
           ) : null}
         </section>
+        ) : null}
       </div>
 
       {formOpen ? (
