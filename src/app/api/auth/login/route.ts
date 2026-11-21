@@ -2,20 +2,25 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
+import { normalizeLoginIdentifier } from "@/lib/auth/admin";
 import { createSession, LOCALE_COOKIE } from "@/lib/auth/session";
 import { AppError, errorPayload, toAppError } from "@/lib/errors";
 import { requestId, audit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
 
 const schema = z.object({
-  email: z.string().trim().toLowerCase().email(),
+  email: z.string().trim().toLowerCase().min(1).max(120),
   password: z.string().min(1),
 });
 
 export async function POST(req: Request) {
   const rid = requestId();
   try {
-    const { email, password } = schema.parse(await req.json().catch(() => ({})));
+    const { email: identifier, password } = schema.parse(await req.json().catch(() => ({})));
+    const email = normalizeLoginIdentifier(identifier);
+    if (!z.string().email().safeParse(email).success) {
+      throw new AppError("VALIDATION", "Invalid email or username", "البريد الإلكتروني أو اسم المستخدم غير صالح");
+    }
     const user = await db.user.findUnique({ where: { email } });
     if (!user || !user.active || !verifyPassword(password, user.passwordHash)) {
       throw new AppError("UNAUTHENTICATED", "Invalid email or password", "البريد الإلكتروني أو كلمة المرور غير صحيحة");

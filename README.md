@@ -55,10 +55,13 @@ Open <http://localhost:3000>.
 
 ### Demo accounts
 
-Password for all demo users: `Bakery@2026`
+Quick local login: `admin` / `admin` (OWNER, full access). The stored email for this shortcut is `admin@bakery.local`.
+
+Password for the other demo users: `Bakery@2026`
 
 | Email | Role | Purpose |
 | --- | --- | --- |
+| `admin` | OWNER | Shortcut login with full access |
 | `owner@goldencrust.demo` | OWNER | Full access to every module |
 | `manager@goldencrust.demo` | GENERAL_MANAGER | Operations and reporting |
 | `accountant@goldencrust.demo` | ACCOUNTANT | Accounting, expenses, reports |

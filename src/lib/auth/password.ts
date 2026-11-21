@@ -1,8 +1,8 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
 /** Scrypt password hashing with per-user salt. Format: scrypt$<salt-hex>$<hash-hex> */
-export function hashPassword(password: string): string {
-  if (password.length < 8) throw new Error("Password must be at least 8 characters");
+export function hashPassword(password: string, minLength = 8): string {
+  if (password.length < minLength) throw new Error(`Password must be at least ${minLength} characters`);
   const salt = randomBytes(16);
   const hash = scryptSync(password, salt, 64);
   return `scrypt$${salt.toString("hex")}$${hash.toString("hex")}`;

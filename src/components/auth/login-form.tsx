@@ -48,12 +48,14 @@ export function LoginForm({ next, locale }: { next: string; locale: Locale }) {
           <Mail className="pointer-events-none absolute inset-y-0 start-3 my-auto h-4 w-4 text-[var(--text-muted)]" />
           <input
             className="input ps-10"
-            type="email"
+            type="text"
             autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="owner@goldencrust.demo"
+            placeholder="admin"
           />
         </span>
       </label>

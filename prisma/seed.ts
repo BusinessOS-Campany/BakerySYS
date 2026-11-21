@@ -6,6 +6,7 @@
  */
 import { db } from "../src/lib/db";
 import { hashPassword } from "../src/lib/auth/password";
+import { ADMIN_EMAIL, ADMIN_PASSWORD } from "../src/lib/auth/admin";
 import { calcRecipeCost, round } from "../src/lib/calculations";
 import { DEFAULT_ROLE_PERMISSIONS, PERMISSIONS } from "../src/lib/permissions/catalog";
 import type { AuthContext } from "../src/lib/auth/session";
@@ -103,6 +104,20 @@ async function main() {
       })),
     });
   }
+
+  const admin = await db.user.create({
+    data: {
+      tenantId: tid,
+      email: ADMIN_EMAIL,
+      nameAr: "مدير النظام",
+      nameEn: "System Admin",
+      passwordHash: hashPassword(ADMIN_PASSWORD, 1),
+      locale: "en",
+    },
+  });
+  await db.userRole.create({
+    data: { tenantId: tid, userId: admin.id, roleId: roleIds.get("OWNER")! },
+  });
 
   // Chart of accounts
   const accounts = new Map<string, string>();
