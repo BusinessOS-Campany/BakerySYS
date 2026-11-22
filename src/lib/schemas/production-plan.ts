@@ -1,11 +1,12 @@
 import { z } from "zod";
 
-/** New production plans store three independent quantities. The piece count is
- *  the canonical value used for recipe costing, stock and batch scaling. */
+/** New production plans store three independent quantities. Only the product is
+ *  required; empty quantities default to 0. The piece count is the canonical
+ *  value used for recipe costing, stock and batch scaling. */
 export const productionPlanCreateSchema = z.object({
   productId: z.string().min(1),
   tableQuantity: z.number().min(0).default(0),
-  pieceQuantity: z.number().positive(),
+  pieceQuantity: z.number().min(0).default(0),
   kilogramQuantity: z.number().min(0).default(0),
   deadline: z.string().optional(),
   branchId: z.string().optional(),
@@ -14,7 +15,7 @@ export const productionPlanCreateSchema = z.object({
 
 export const productionPlanUpdateSchema = z.object({
   tableQuantity: z.number().min(0).optional(),
-  pieceQuantity: z.number().positive().optional(),
+  pieceQuantity: z.number().min(0).optional(),
   kilogramQuantity: z.number().min(0).optional(),
   notes: z.string().nullable().optional(),
 }).refine((value) => Object.keys(value).length > 0, {

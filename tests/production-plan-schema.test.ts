@@ -35,8 +35,15 @@ describe("production plan schemas", () => {
     }
   });
 
-  it("requires a positive piece count and non-negative table/kilo counts", () => {
-    expect(productionPlanCreateSchema.safeParse({ ...validPlan, pieceQuantity: 0 }).success).toBe(false);
+  it("defaults omitted quantities to zero while rejecting negatives", () => {
+    const result = productionPlanCreateSchema.safeParse({ productId: "product-1" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tableQuantity).toBe(0);
+      expect(result.data.pieceQuantity).toBe(0);
+      expect(result.data.kilogramQuantity).toBe(0);
+    }
+    expect(productionPlanCreateSchema.safeParse({ ...validPlan, pieceQuantity: -1 }).success).toBe(false);
     expect(productionPlanCreateSchema.safeParse({ ...validPlan, tableQuantity: -1 }).success).toBe(false);
     expect(productionPlanCreateSchema.safeParse({ ...validPlan, kilogramQuantity: -1 }).success).toBe(false);
   });

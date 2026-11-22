@@ -90,9 +90,9 @@ export function ProductionPage({ locale, canManage, canComplete }: { locale: Loc
           }),
           fields: [
             { name: "productId", label: L(locale, "المنتج", "Product"), type: "select", required: true, options: productOptions },
-            { name: "tableQuantity", label: L(locale, "الكمية بالطاولة", "Quantity by table"), type: "number", required: true, hint: L(locale, "عدد الطاولات أو الوحدات", "Number of tables or units") },
-            { name: "pieceQuantity", label: L(locale, "الكمية بالحبة", "Quantity by piece"), type: "number", required: true, hint: L(locale, "تُستخدم للتكلفة والمخزون", "Used for costing and inventory") },
-            { name: "kilogramQuantity", label: L(locale, "الكمية بالكيلو", "Quantity by kilogram"), type: "number", required: true },
+            { name: "tableQuantity", label: L(locale, "الكمية بالطاولة", "Quantity by table"), type: "number", hint: L(locale, "اختياري — يُافترض صفر إذا تُرك فارغاً", "Optional — defaults to 0 if left empty") },
+            { name: "pieceQuantity", label: L(locale, "الكمية بالحبة", "Quantity by piece"), type: "number", hint: L(locale, "اختياري — تُستخدم للتكلفة والمخزون", "Optional — used for costing and inventory") },
+            { name: "kilogramQuantity", label: L(locale, "الكمية بالكيلو", "Quantity by kilogram"), type: "number", hint: L(locale, "اختياري — يُافترض صفر إذا تُرك فارغاً", "Optional — defaults to 0 if left empty") },
             { name: "notes", label: L(locale, "ملاحظات", "Notes"), type: "textarea" },
           ],
           build: (values) => ({
