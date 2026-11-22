@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FileText, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { CustomerStatement } from "@/components/customers/customer-statement";
+import { useDialog } from "@/components/ui/dialog";
 import type { ResourceConfig, ResourceField } from "@/lib/resources/config";
 import { cn } from "@/lib/utils";
 import { formatDate, formatNumber, translate, type Locale } from "@/lib/i18n/dictionary";
@@ -31,6 +32,7 @@ export function ResourceTable({
   decimalPlaces: number;
 }) {
   const t = useCallback((key: string) => translate(locale, key), [locale]);
+  const { confirm } = useDialog();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -125,7 +127,7 @@ export function ResourceTable({
   }
 
   async function remove(row: Row) {
-    if (!window.confirm(t("common.confirmDelete"))) return;
+    if (!await confirm({ message: t("common.confirmDelete"), tone: "danger" })) return;
     setError("");
     const response = await fetch(`/api/resources/${config.key}/${row.id}`, { method: "DELETE" });
     if (!response.ok) {

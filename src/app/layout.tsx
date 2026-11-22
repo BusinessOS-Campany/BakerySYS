@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import { DialogProvider } from "@/components/ui/dialog";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,7 +15,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const theme = themeCookie === "dark" || themeCookie === "light" ? themeCookie : "light";
   return (
     <html lang={locale} dir={locale === "ar" ? "rtl" : "ltr"} data-theme={theme} suppressHydrationWarning>
-      <body>{children}</body>
+      <body><DialogProvider locale={locale}>{children}</DialogProvider></body>
     </html>
   );
 }

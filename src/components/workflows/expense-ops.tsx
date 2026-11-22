@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useDialog } from "@/components/ui/dialog";
 import {
   apiSend, DataPanel, L, lookupOptions, numericLocale, statusBadge, useList, useLookups, type Locale,
 } from "./shared";
@@ -23,6 +24,7 @@ type ExpenseRow = {
 };
 
 export function ExpensesPage({ locale, canManage }: { locale: Locale; canManage: boolean }) {
+  const { confirm } = useDialog();
   const [refresh, setRefresh] = useState(0);
   const expenses = useList<ExpenseRow>("/api/expenses?pageSize=100", undefined, locale, refresh);
   const lookups = useLookups(["expense-categories", "accounts"], locale);
@@ -137,7 +139,7 @@ export function ExpensesPage({ locale, canManage }: { locale: Locale; canManage:
             requiresManage: true,
             visible: (row) => canManage && row.status === "POSTED" && !row.isCashOut,
             run: async (row, reloadFn, setError) => {
-              if (!window.confirm(L(locale, "هل تريد إلغاء هذا المصروف؟", "Void this expense?"))) return;
+              if (!await confirm({ message: L(locale, "هل تريد إلغاء هذا المصروف؟", "Void this expense?"), tone: "danger" })) return;
               try {
                 await apiSend(`/api/expenses/${row.id}`, "POST", {}, locale);
                 await reloadFn();

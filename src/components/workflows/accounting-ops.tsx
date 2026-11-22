@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useDialog } from "@/components/ui/dialog";
 import {
   apiSend, DataPanel, L, lookupOptions, numericLocale, statusBadge, useList, useLookups, type Locale,
 } from "./shared";
@@ -16,6 +17,7 @@ type JournalRow = {
 type JournalLine = { key: string; accountId: string; debit: string; credit: string; memo: string };
 
 export function AccountingPage({ locale, canManage }: { locale: Locale; canManage: boolean }) {
+  const { confirm } = useDialog();
   const [refresh, setRefresh] = useState(0);
   const entries = useList<JournalRow>("/api/accounting?pageSize=100", undefined, locale, refresh);
   const accounts = useLookups(["accounts"], locale);
@@ -82,7 +84,7 @@ export function AccountingPage({ locale, canManage }: { locale: Locale; canManag
             requiresManage: true,
             visible: (row) => canManage && row.status === "POSTED",
             run: async (row, reloadFn, setError) => {
-              if (!window.confirm(L(locale, "هل تريد عكس هذا القيد؟", "Reverse this journal entry?"))) return;
+              if (!await confirm({ message: L(locale, "هل تريد عكس هذا القيد؟", "Reverse this journal entry?"), tone: "danger" })) return;
               try {
                 await apiSend(`/api/accounting/${row.id}/reverse`, "POST", {}, locale);
                 await reloadFn();

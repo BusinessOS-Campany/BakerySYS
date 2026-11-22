@@ -5,6 +5,7 @@ import {
   Banknote, CheckCircle2, CreditCard, Minus, Plus, RefreshCw, Search,
   ShoppingCart, Trash2, Wallet, Wifi, WifiOff, X,
 } from "lucide-react";
+import { useDialog } from "@/components/ui/dialog";
 import { enqueueSale, listQueuedSales, removeQueuedSale, updateQueuedSale } from "@/lib/offline/db";
 import { formatMoney, translate, type Locale } from "@/lib/i18n/dictionary";
 
@@ -52,6 +53,7 @@ export function PosScreen({
   canCloseSession: boolean;
   data: PosData;
 }) {
+  const { prompt } = useDialog();
   const t = (key: string) => translate(locale, key);
   const money = (value: number) => formatMoney(value, locale, currency, decimalPlaces);
   const [branchId, setBranchId] = useState(defaultBranchId ?? "");
@@ -245,7 +247,7 @@ export function PosScreen({
 
   async function openRegister() {
     if (!registerId) { setError(t("pos.openRegister")); return; }
-    const balance = window.prompt(t("pos.openingBalance"), "0");
+    const balance = await prompt({ message: t("pos.openingBalance"), defaultValue: "0", inputType: "number" });
     if (balance === null) return;
     setBusy(true);
     try {
@@ -265,7 +267,11 @@ export function PosScreen({
 
   async function closeRegister() {
     if (!session) return;
-    const amount = window.prompt(t("pos.closingBalance"), String(Math.round(subtotal * 100) / 100));
+    const amount = await prompt({
+      message: t("pos.closingBalance"),
+      defaultValue: String(Math.round(subtotal * 100) / 100),
+      inputType: "number",
+    });
     if (amount === null) return;
     setBusy(true);
     try {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useDialog } from "@/components/ui/dialog";
 import {
   apiFetch, apiSend, L, useList, type Locale,
 } from "@/components/workflows/shared";
@@ -35,6 +36,7 @@ export function ArapPage({
   standalone?: boolean;
 }) {
   const router = useRouter();
+  const { confirm } = useDialog();
   const [refresh, setRefresh] = useState(0);
   const [selectedId, setSelectedId] = useState(initialCustomerId);
   const [editing, setEditing] = useState<CustomerTransactionItem | null>(null);
@@ -148,9 +150,10 @@ export function ArapPage({
   }
 
   async function remove(entry: CustomerTransactionItem) {
-    const confirmed = window.confirm(
-      L(locale, "هل تريد حذف هذه العملية نهائيًا؟", "Permanently delete this transaction?"),
-    );
+    const confirmed = await confirm({
+      message: L(locale, "هل تريد حذف هذه العملية نهائيًا؟", "Permanently delete this transaction?"),
+      tone: "danger",
+    });
     if (!confirmed) return;
     setFormError("");
     try {

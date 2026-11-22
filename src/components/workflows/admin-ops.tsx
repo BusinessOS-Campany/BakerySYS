@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { useDialog } from "@/components/ui/dialog";
 import {
   apiFetch, apiSend, DataPanel, FieldInput, L, lookupOptions, numericLocale, type Field, type FormValues, type Locale,
 } from "./shared";
@@ -36,6 +37,7 @@ type SettingsPayload = {
 };
 
 export function UsersPage({ locale, canManage }: { locale: Locale; canManage: boolean }) {
+  const { confirm } = useDialog();
   const [refresh, setRefresh] = useState(0);
   const [payload, setPayload] = useState<UsersPayload | null>(null);
   const [editing, setEditing] = useState<UserRow | null>(null);
@@ -128,7 +130,7 @@ export function UsersPage({ locale, canManage }: { locale: Locale; canManage: bo
             tone: "danger",
             requiresManage: true,
             run: async (row, reloadFn, setError) => {
-              if (!window.confirm(L(locale, "هل تريد حذف المستخدم نهائياً؟", "Permanently delete this user?"))) return;
+              if (!await confirm({ message: L(locale, "هل تريد حذف المستخدم نهائياً؟", "Permanently delete this user?"), tone: "danger" })) return;
               try {
                 await apiFetch(`/api/users/${row.id}`, locale, { method: "DELETE" });
                 await reloadFn();
@@ -267,6 +269,7 @@ function UserEditor({
 }
 
 function RolesPanel({ locale, canManage, refresh }: { locale: Locale; canManage: boolean; refresh: number }) {
+  const { confirm } = useDialog();
   const [payload, setPayload] = useState<RolesPayload | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -345,7 +348,7 @@ function RolesPanel({ locale, canManage, refresh }: { locale: Locale; canManage:
             requiresManage: true,
             visible: (row) => row.code !== "OWNER",
             run: async (row, reloadFn, setError) => {
-              if (!window.confirm(L(locale, "هل تريد حذف هذا الدور نهائياً؟", "Permanently delete this role?"))) return;
+              if (!await confirm({ message: L(locale, "هل تريد حذف هذا الدور نهائياً؟", "Permanently delete this role?"), tone: "danger" })) return;
               try {
                 await apiFetch(`/api/roles/${row.id}`, locale, { method: "DELETE" });
                 await reloadFn();

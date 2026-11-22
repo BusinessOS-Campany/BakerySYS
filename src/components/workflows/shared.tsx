@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDialog } from "@/components/ui/dialog";
 import { formatDate, formatNumber, numericLocale, type Locale } from "@/lib/i18n/dictionary";
 
 export type { Locale };
@@ -275,6 +276,7 @@ export function DataPanel<T extends { id: string }>({
   const [editingRow, setEditingRow] = useState<T | null>(null);
   const [saving, setSaving] = useState(false);
   const [values, setValues] = useState<FormValues>(() => defaultValues(form?.fields ?? [], form?.initial));
+  const { confirm } = useDialog();
   const hasControlledRows = controlledRows !== undefined;
   const extractRef = useRef(extract);
   extractRef.current = extract;
@@ -352,9 +354,9 @@ export function DataPanel<T extends { id: string }>({
     }
   }
 
-  async function builtInDelete(row: T, confirm?: string) {
+  async function builtInDelete(row: T, confirmMessage?: string) {
     if (!form?.itemEndpoint) return;
-    if (!window.confirm(confirm ?? L(locale, "هل تريد حذف هذا السجل؟", "Delete this record?"))) return;
+    if (!await confirm({ message: confirmMessage ?? L(locale, "هل تريد حذف هذا السجل؟", "Delete this record?"), tone: "danger" })) return;
     setError("");
     try {
       await apiFetch(form.itemEndpoint(row), locale, { method: "DELETE" });
