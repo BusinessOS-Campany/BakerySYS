@@ -10,6 +10,7 @@ export default async function PosPage() {
   const auth = await getAuth();
   if (!auth) redirect("/login");
   if (!auth.permissions.has("sales.create") && !auth.roles.includes("OWNER")) redirect("/");
+  const canCloseSession = auth.permissions.has("pos.close") || auth.roles.includes("OWNER");
 
   const [products, warehouses, branches, customers, registers, openSession] = await Promise.all([
     db.product.findMany({
@@ -47,7 +48,11 @@ export default async function PosPage() {
     db.cashSession.findFirst({
       where: {
         tenantId: auth.user.tenantId, status: "OPEN",
-        ...(auth.user.id ? { cashierId: auth.user.id } : {}),
+        // Cashiers use their own session; supervisors/owners (pos.close) may
+        // act on any open session in their branch, matching the API policy.
+        ...(canCloseSession
+          ? (auth.branchId ? { branchId: auth.branchId } : {})
+          : { cashierId: auth.user.id }),
       },
       orderBy: { openedAt: "desc" },
     }),
@@ -62,7 +67,7 @@ export default async function PosPage() {
       taxEnabled={auth.tenant.taxEnabled}
       defaultBranchId={auth.branchId ?? branches[0]?.id ?? null}
       canOpenSession={auth.permissions.has("pos.open") || auth.roles.includes("OWNER")}
-      canCloseSession={auth.permissions.has("pos.close") || auth.roles.includes("OWNER")}
+      canCloseSession={canCloseSession}
       data={serialize({ products, warehouses, branches, customers, registers, openSession }) as unknown as PosData}
     />
   );
