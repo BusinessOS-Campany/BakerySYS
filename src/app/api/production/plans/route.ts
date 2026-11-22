@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { productionPlanCreateSchema } from "@/lib/schemas/production-plan";
 import { apiRoute } from "@/lib/http";
 import { createProductionPlan, approveProductionPlan } from "@/lib/production/service";
 import { assertBranchAccess } from "@/lib/auth/session";
@@ -11,26 +12,16 @@ export const GET = apiRoute({
   handler: async (_input, auth) => {
     const plans = await db.productionPlan.findMany({
       where: { tenantId: auth.user.tenantId, ...(auth.branchId ? { branchId: auth.branchId } : {}) },
-      orderBy: { plannedDate: "desc" },
+      orderBy: [{ plannedDate: "desc" }, { createdAt: "desc" }],
       take: 100,
     });
     return serialize(plans);
   },
 });
 
-const createSchema = z.object({
-  productId: z.string(),
-  plannedQuantity: z.number().positive(),
-  plannedDate: z.string(),
-  deadline: z.string().optional(),
-  branchId: z.string().optional(),
-  priority: z.string().default("NORMAL"),
-  notes: z.string().optional(),
-});
-
 export const POST = apiRoute({
   permission: "production.manage",
-  schema: createSchema,
+  schema: productionPlanCreateSchema,
   handler: async (input, auth) => {
     const branchId = input.branchId ?? auth.branchId ?? null;
     assertBranchAccess(auth, branchId);
@@ -38,10 +29,11 @@ export const POST = apiRoute({
       tenantId: auth.user.tenantId,
       branchId,
       productId: input.productId,
-      plannedQuantity: input.plannedQuantity,
-      plannedDate: new Date(input.plannedDate),
+      tableQuantity: input.tableQuantity,
+      pieceQuantity: input.pieceQuantity,
+      kilogramQuantity: input.kilogramQuantity,
+      plannedDate: new Date(),
       deadline: input.deadline ? new Date(input.deadline) : null,
-      priority: input.priority,
       notes: input.notes,
       createdById: auth.user.id,
     }));

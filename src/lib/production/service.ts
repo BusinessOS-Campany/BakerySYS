@@ -12,10 +12,11 @@ export async function createProductionPlan(tx: Db, input: {
   branchId?: string | null;
   productId: string;
   recipeVersionId?: string | null;
-  plannedQuantity: number;
+  tableQuantity?: number;
+  pieceQuantity: number;
+  kilogramQuantity?: number;
   plannedDate: Date;
   deadline?: Date | null;
-  priority?: string;
   notes?: string;
   createdById: string;
 }) {
@@ -30,7 +31,8 @@ export async function createProductionPlan(tx: Db, input: {
       }))?.id;
   if (!versionId) throw new AppError("NOT_FOUND", "Recipe version not found", "نسخة الوصفة غير موجودة");
 
-  const multiplier = round(Number(input.plannedQuantity) / (Number(recipe.yieldQuantity) || 1), 8);
+  const pieceQuantity = round(input.pieceQuantity, 6);
+  const multiplier = round(pieceQuantity / (Number(recipe.yieldQuantity) || 1), 8);
   const requirements = await recipeRequirements(tx, input.tenantId, versionId, multiplier);
   const shortage = requirements.filter((r) => r.shortage > 0);
   const estimatedCost = requirements.reduce((sum, r) => sum + r.lineCost, 0);
@@ -39,8 +41,11 @@ export async function createProductionPlan(tx: Db, input: {
     data: {
       tenantId: input.tenantId, branchId: input.branchId ?? null, code,
       productId: input.productId, recipeVersionId: versionId,
-      plannedQuantity: round(input.plannedQuantity, 6),
-      priority: input.priority ?? "NORMAL", status: "PLANNED",
+      plannedQuantity: pieceQuantity,
+      tableQuantity: round(input.tableQuantity ?? 0, 6),
+      pieceQuantity,
+      kilogramQuantity: round(input.kilogramQuantity ?? 0, 6),
+      status: "PLANNED",
       plannedDate: input.plannedDate, deadline: input.deadline ?? null,
       requirements: JSON.parse(JSON.stringify(requirements)) as never,
       estimatedCost: round(estimatedCost, 6),
@@ -51,10 +56,78 @@ export async function createProductionPlan(tx: Db, input: {
   await tx.productionPlanItem.create({
     data: {
       tenantId: input.tenantId, planId: plan.id, productId: input.productId,
-      recipeVersionId: versionId, plannedQuantity: round(input.plannedQuantity, 6),
+      recipeVersionId: versionId, plannedQuantity: pieceQuantity,
     },
   });
   return plan;
+}
+
+/** Keeps the three quantity fields independent while keeping the canonical
+ *  piece count (and its derived cost snapshot) in sync with the plan item. */
+export async function updateProductionPlan(tx: Db, input: {
+  tenantId: string;
+  planId: string;
+  tableQuantity?: number;
+  pieceQuantity?: number;
+  kilogramQuantity?: number;
+  notes?: string | null;
+}) {
+  const plan = await tx.productionPlan.findFirst({
+    where: { id: input.planId, tenantId: input.tenantId },
+  });
+  if (!plan) throw new AppError("NOT_FOUND", "Production plan not found", "خطة الإنتاج غير موجودة");
+  if (plan.status !== "PLANNED") {
+    throw new AppError("INVALID_STATE", "Only planned production plans can be changed", "يمكن تعديل الخطة في حالة التخطيط فقط");
+  }
+
+  const data: {
+    tableQuantity?: number;
+    pieceQuantity?: number;
+    kilogramQuantity?: number;
+    plannedQuantity?: number;
+    notes?: string | null;
+    requirements?: never;
+    estimatedCost?: number;
+    shortage?: never;
+  } = {};
+  if (input.tableQuantity !== undefined) data.tableQuantity = round(input.tableQuantity, 6);
+  if (input.kilogramQuantity !== undefined) data.kilogramQuantity = round(input.kilogramQuantity, 6);
+  if (input.notes !== undefined) data.notes = input.notes || null;
+
+  if (input.pieceQuantity !== undefined) {
+    if (!plan.recipeVersionId) {
+      throw new AppError("INVALID_STATE", "Recipe version not found", "نسخة الوصفة غير موجودة");
+    }
+    const version = await tx.recipeVersion.findFirst({
+      where: { id: plan.recipeVersionId, tenantId: input.tenantId },
+      select: { recipeId: true },
+    });
+    const recipe = version
+      ? await tx.recipe.findFirst({
+          where: { id: version.recipeId, tenantId: input.tenantId },
+          select: { yieldQuantity: true },
+        })
+      : null;
+    if (!recipe) throw new AppError("NOT_FOUND", "Recipe not found", "الوصفة غير موجودة");
+
+    const pieceQuantity = round(input.pieceQuantity, 6);
+    const multiplier = round(pieceQuantity / (Number(recipe.yieldQuantity) || 1), 8);
+    const requirements = await recipeRequirements(tx, input.tenantId, plan.recipeVersionId, multiplier);
+    data.pieceQuantity = pieceQuantity;
+    data.plannedQuantity = pieceQuantity;
+    data.requirements = JSON.parse(JSON.stringify(requirements)) as never;
+    data.estimatedCost = round(requirements.reduce((sum, r) => sum + r.lineCost, 0), 6);
+    data.shortage = JSON.parse(JSON.stringify(requirements.filter((r) => r.shortage > 0))) as never;
+  }
+
+  const updated = await tx.productionPlan.update({ where: { id: plan.id }, data });
+  if (input.pieceQuantity !== undefined) {
+    await tx.productionPlanItem.updateMany({
+      where: { tenantId: input.tenantId, planId: plan.id },
+      data: { plannedQuantity: data.plannedQuantity! },
+    });
+  }
+  return updated;
 }
 
 export async function approveProductionPlan(tx: Db, input: {

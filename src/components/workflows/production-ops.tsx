@@ -8,11 +8,12 @@ import {
 
 type PlanRow = {
   id: string;
-  planNumber: string;
+  code: string;
   productId: string;
-  plannedQuantity: string | number;
+  tableQuantity: string | number;
+  pieceQuantity: string | number;
+  kilogramQuantity: string | number;
   plannedDate: string;
-  priority: string;
   status: string;
   notes: string | null;
 };
@@ -65,43 +66,40 @@ export function ProductionPage({ locale, canManage, canComplete }: { locale: Loc
         refreshKey={refresh}
         canManage={canManage}
         columns={[
-          { key: "planNumber", label: L(locale, "رقم الخطة", "Plan") },
+          { key: "code", label: L(locale, "رقم الخطة", "Plan") },
           { key: "productId", label: L(locale, "المنتج", "Product"), render: (row) => lookupLabel(lookups.products ?? [], row.productId, locale) },
-          { key: "plannedQuantity", label: L(locale, "الكمية", "Quantity") },
+          { key: "tableQuantity", label: L(locale, "بالطاولة", "By table") },
+          { key: "pieceQuantity", label: L(locale, "بالحبة", "By piece") },
+          { key: "kilogramQuantity", label: L(locale, "بالكيلو", "By kilogram") },
           { key: "plannedDate", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.plannedDate).toLocaleDateString(numericLocale(locale)) },
-          { key: "priority", label: L(locale, "الأولوية", "Priority") },
           { key: "status", label: L(locale, "الحالة", "Status"), render: (row) => statusBadge(row.status, locale) },
         ]}
         form={{
           title: L(locale, "خطة إنتاج جديدة", "New production plan"),
           editTitle: L(locale, "تعديل خطة الإنتاج", "Edit production plan"),
           endpoint: "/api/production/plans",
-          itemEndpoint: (row) => `/api/workflow/production-plans/${row.id}`,
+          itemEndpoint: (row) => `/api/production/plans/${row.id}`,
           itemMethod: "PATCH",
           enabled: canManage,
           initialFromRow: (row) => ({
             productId: row.productId,
-            plannedQuantity: String(row.plannedQuantity),
-            plannedDate: new Date(row.plannedDate).toISOString().slice(0, 10),
-            priority: row.priority,
+            tableQuantity: String(row.tableQuantity ?? 0),
+            pieceQuantity: String(row.pieceQuantity ?? 0),
+            kilogramQuantity: String(row.kilogramQuantity ?? 0),
             notes: row.notes ?? "",
           }),
           fields: [
             { name: "productId", label: L(locale, "المنتج", "Product"), type: "select", required: true, options: productOptions },
-            { name: "plannedQuantity", label: L(locale, "الكمية المخططة", "Planned quantity"), type: "number", required: true },
-            { name: "plannedDate", label: L(locale, "تاريخ الإنتاج", "Production date"), type: "date", required: true },
-            { name: "priority", label: L(locale, "الأولوية", "Priority"), type: "select", defaultValue: "NORMAL", options: [
-              { value: "LOW", label: L(locale, "منخفضة", "Low") },
-              { value: "NORMAL", label: L(locale, "عادية", "Normal") },
-              { value: "HIGH", label: L(locale, "عالية", "High") },
-            ] },
+            { name: "tableQuantity", label: L(locale, "الكمية بالطاولة", "Quantity by table"), type: "number", required: true, hint: L(locale, "عدد الطاولات أو الوحدات", "Number of tables or units") },
+            { name: "pieceQuantity", label: L(locale, "الكمية بالحبة", "Quantity by piece"), type: "number", required: true, hint: L(locale, "تُستخدم للتكلفة والمخزون", "Used for costing and inventory") },
+            { name: "kilogramQuantity", label: L(locale, "الكمية بالكيلو", "Quantity by kilogram"), type: "number", required: true },
             { name: "notes", label: L(locale, "ملاحظات", "Notes"), type: "textarea" },
           ],
           build: (values) => ({
             productId: String(values.productId),
-            plannedQuantity: Number(values.plannedQuantity),
-            plannedDate: String(values.plannedDate),
-            priority: String(values.priority || "NORMAL"),
+            tableQuantity: Number(values.tableQuantity || 0),
+            pieceQuantity: Number(values.pieceQuantity || 0),
+            kilogramQuantity: Number(values.kilogramQuantity || 0),
             notes: String(values.notes || "") || undefined,
           }),
         }}
@@ -177,7 +175,7 @@ export function ProductionPage({ locale, canManage, canComplete }: { locale: Loc
             { name: "plannedQuantity", label: L(locale, "الكمية", "Quantity"), type: "number", required: true },
             { name: "warehouseId", label: L(locale, "مخزن المنتجات التامة", "Finished goods warehouse"), type: "select", required: true, options: warehouseOptions },
             { name: "sourceWarehouseId", label: L(locale, "مخزن المواد الخام", "Raw material warehouse"), type: "select", options: warehouseOptions },
-            { name: "planId", label: L(locale, "الخطة", "Plan"), type: "select", options: plans.rows.map((plan) => ({ value: plan.id, label: `${plan.planNumber} · ${plan.plannedQuantity}` })) },
+            { name: "planId", label: L(locale, "الخطة", "Plan"), type: "select", options: plans.rows.map((plan) => ({ value: plan.id, label: `${plan.code} · ${plan.pieceQuantity}` })) },
             { name: "expiryDate", label: L(locale, "تاريخ الانتهاء", "Expiry date"), type: "date" },
             { name: "notes", label: L(locale, "ملاحظات", "Notes"), type: "textarea" },
           ],

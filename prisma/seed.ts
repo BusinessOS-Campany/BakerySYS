@@ -413,7 +413,8 @@ async function main() {
   await db.$transaction(async (tx) => {
     const plan = await createProductionPlan(tx, {
       tenantId: tid, branchId: branchMain.id, productId: products.get("BREAD")!,
-      plannedQuantity: 40, plannedDate: new Date(), createdById: users.get("PRODUCTION_MANAGER")!,
+      pieceQuantity: 40, tableQuantity: 0, kilogramQuantity: 0,
+      plannedDate: new Date(), createdById: users.get("PRODUCTION_MANAGER")!,
     });
     await tx.productionPlan.update({ where: { id: plan.id }, data: { status: "APPROVED" } });
     const batch = await createBatch(tx, {

@@ -70,8 +70,13 @@ const CONFIG: Record<string, ResourceConfig> = {
   "production-plans": {
     model: "productionPlan",
     permission: "production.manage",
-    fields: { plannedQuantity: "number", priority: "string", plannedDate: "date", deadline: "nullableDate", notes: "nullableString" },
-    allowed: { priority: ["LOW", "NORMAL", "HIGH"] },
+    fields: {
+      tableQuantity: "number", pieceQuantity: "number", kilogramQuantity: "number",
+      notes: "nullableString",
+    },
+    derive: (row, data) => data.pieceQuantity === undefined
+      ? {}
+      : { plannedQuantity: Number(data.pieceQuantity) },
     blocked: (row) => row.status !== "PLANNED",
     blockedMessage: "Only planned production plans can be changed",
     blockedMessageAr: "يمكن تعديل الخطة في حالة التخطيط فقط",

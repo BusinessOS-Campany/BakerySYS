@@ -713,6 +713,9 @@ model ProductionPlan {
   productId      String
   recipeVersionId String?
   plannedQuantity Decimal @db.Decimal(18, 4)
+  tableQuantity   Decimal @default(0) @db.Decimal(18, 4)
+  pieceQuantity   Decimal @default(0) @db.Decimal(18, 4)
+  kilogramQuantity Decimal @default(0) @db.Decimal(18, 4)
   priority       String   @default("NORMAL")
   status         String   @default("PLANNED")
   plannedDate    DateTime
