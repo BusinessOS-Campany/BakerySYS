@@ -1,6 +1,6 @@
 ﻿import type { Db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { calcLineTotals, round } from "@/lib/calculations";
+import { calcLineTotals, computeExpectedCash, round } from "@/lib/calculations";
 import { nextNumber } from "@/lib/sequence";
 import { postJournal, reverseJournal, ACCOUNT_CODES } from "@/lib/accounting/ledger";
 import { buildSaleJournalLines } from "@/lib/sales/journal";
@@ -364,6 +364,25 @@ export async function openCashSession(tx: Db, auth: AuthContext, input: {
   });
 }
 
+async function sessionCashTotals(tx: Db, auth: AuthContext, sessionId: string) {
+  const movements = await tx.cashMovement.findMany({ where: { tenantId: auth.user.tenantId, sessionId } });
+  const sales = await tx.sale.findMany({
+    where: {
+      tenantId: auth.user.tenantId, cashSessionId: sessionId,
+      status: { in: ["COMPLETED", "REFUNDED"] },
+    },
+    select: { id: true },
+  });
+  const salePayments = sales.length
+    ? await tx.salePayment.findMany({ where: { saleId: { in: sales.map((s) => s.id) }, method: "CASH" } })
+    : [];
+  return {
+    cashSales: salePayments.reduce((s, p) => s + Number(p.amount), 0),
+    cashIn: movements.filter((m) => m.kind === "IN").reduce((s, m) => s + Number(m.amount), 0),
+    cashOut: movements.filter((m) => m.kind === "OUT").reduce((s, m) => s + Number(m.amount), 0),
+  };
+}
+
 export async function closeCashSession(tx: Db, auth: AuthContext, input: {
   sessionId: string;
   actualClosing: number;
@@ -373,21 +392,8 @@ export async function closeCashSession(tx: Db, auth: AuthContext, input: {
     where: { id: input.sessionId, tenantId: auth.user.tenantId },
   });
   if (!session || session.status !== "OPEN") throw new AppError("INVALID_STATE", "Session is not open", "الوردية غير مفتوحة");
-  const movements = await tx.cashMovement.findMany({ where: { sessionId: session.id } });
-  const sales = await tx.sale.findMany({
-    where: {
-      tenantId: auth.user.tenantId, cashSessionId: session.id,
-      status: { in: ["COMPLETED", "REFUNDED"] },
-    },
-    select: { id: true },
-  });
-  const salePayments = sales.length
-    ? await tx.salePayment.findMany({ where: { saleId: { in: sales.map((s) => s.id) }, method: "CASH" } })
-    : [];
-  const cashSales = salePayments.reduce((s, p) => s + Number(p.amount), 0);
-  const cashIn = movements.filter((m) => m.kind === "IN").reduce((s, m) => s + Number(m.amount), 0);
-  const cashOut = movements.filter((m) => m.kind === "OUT").reduce((s, m) => s + Number(m.amount), 0);
-  const expected = round(Number(session.openingBalance) + cashSales + cashIn - cashOut, 6);
+  const totals = await sessionCashTotals(tx, auth, session.id);
+  const expected = computeExpectedCash({ openingBalance: session.openingBalance, ...totals });
   const difference = round(input.actualClosing - expected, 6);
   if (Math.abs(difference) >= 0.000001) {
     await notify(tx, {
@@ -402,6 +408,46 @@ export async function closeCashSession(tx: Db, auth: AuthContext, input: {
     data: {
       status: "CLOSED", closedAt: new Date(), expectedClosing: expected,
       actualClosing: round(input.actualClosing, 6), difference, notes: input.notes ?? null,
+    },
+  });
+}
+
+/** Records a cash disbursement (صرف الصندوق) from an open register session. */
+export async function recordCashOut(tx: Db, auth: AuthContext, input: {
+  sessionId: string;
+  amount: number;
+  reason?: string;
+}) {
+  const session = await tx.cashSession.findFirst({
+    where: { id: input.sessionId, tenantId: auth.user.tenantId },
+  });
+  if (!session) throw new AppError("NOT_FOUND", "Session not found", "الوردية غير موجودة");
+  assertBranchAccess(auth, session.branchId);
+  if (session.status !== "OPEN") throw new AppError("INVALID_STATE", "Session is not open", "الوردية غير مفتوحة");
+  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+    throw new AppError("VALIDATION", "Amount must be greater than zero", "المبلغ يجب أن يكون أكبر من صفر");
+  }
+
+  const amount = round(input.amount, 6);
+  const available = computeExpectedCash({
+    openingBalance: session.openingBalance,
+    ...(await sessionCashTotals(tx, auth, session.id)),
+  });
+  if (amount > available + 0.000001) {
+    throw new AppError(
+      "VALIDATION",
+      `Insufficient cash in drawer. Available: ${available}`,
+      `الرصيد المتاح في الصندوق غير كافٍ. المتاح: ${available}`,
+    );
+  }
+
+  return tx.cashMovement.create({
+    data: {
+      tenantId: auth.user.tenantId,
+      sessionId: session.id,
+      kind: "OUT",
+      amount,
+      reason: input.reason?.trim() || null,
     },
   });
 }

@@ -10,6 +10,20 @@ export function round(value: number, dp = 2): number {
   return Math.round((value + Number.EPSILON) * factor) / factor;
 }
 
+/** Expected cash held in a register session: opening + cash sales + cash in - cash out. */
+export function computeExpectedCash(input: {
+  openingBalance: unknown;
+  cashSales: unknown;
+  cashIn: unknown;
+  cashOut: unknown;
+}): number {
+  return round(
+    safeNumber(input.openingBalance) + safeNumber(input.cashSales)
+      + safeNumber(input.cashIn) - safeNumber(input.cashOut),
+    6,
+  );
+}
+
 export function safeNumber(value: unknown): number {
   if (value === null || value === undefined || value === "") return 0;
   const n = Number(value);

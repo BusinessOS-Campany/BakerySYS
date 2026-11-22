@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Banknote, CheckCircle2, CreditCard, Minus, Plus, RefreshCw, Search,
-  ShoppingCart, Trash2, Wallet, Wifi, WifiOff,
+  ShoppingCart, Trash2, Wallet, Wifi, WifiOff, X,
 } from "lucide-react";
 import { enqueueSale, listQueuedSales, removeQueuedSale, updateQueuedSale } from "@/lib/offline/db";
 import { formatMoney, translate, type Locale } from "@/lib/i18n/dictionary";
@@ -18,6 +18,7 @@ type Branch = { id: string; nameAr: string; nameEn: string };
 type Customer = { id: string; nameAr: string; nameEn: string; phone: string | null; code: string };
 type Register = { id: string; branchId: string; code: string; nameAr: string; nameEn: string };
 type Session = { id: string; registerId: string; openingBalance: string | number; openedAt: string };
+type CashMovement = { id: string; kind: string; amount: string | number; reason: string | null; createdAt: string };
 
 export type PosData = {
   products: Product[];
@@ -69,6 +70,12 @@ export function PosScreen({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [invoice, setInvoice] = useState("");
+  const [cashOutOpen, setCashOutOpen] = useState(false);
+  const [cashOutAmount, setCashOutAmount] = useState("");
+  const [cashOutReason, setCashOutReason] = useState("");
+  const [cashOutError, setCashOutError] = useState("");
+  const [cashOutBusy, setCashOutBusy] = useState(false);
+  const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
 
   useEffect(() => {
     if (!message) return;
@@ -107,6 +114,18 @@ export function PosScreen({
   }, []);
 
   useEffect(() => { void refreshQueue(); }, [refreshQueue]);
+
+  const refreshCashMovements = useCallback(async () => {
+    if (!session) { setCashMovements([]); return; }
+    try {
+      const response = await fetch(`/api/cash-movements?sessionId=${encodeURIComponent(session.id)}`);
+      if (!response.ok) return;
+      const payload = await response.json();
+      setCashMovements((payload.items ?? []) as CashMovement[]);
+    } catch { /* keep the last known movements */ }
+  }, [session]);
+
+  useEffect(() => { void refreshCashMovements(); }, [refreshCashMovements]);
 
   const syncQueue = useCallback(async () => {
     if (!navigator.onLine) return;
@@ -209,6 +228,7 @@ export function PosScreen({
       setInvoice(String(result?.sale?.invoiceNumber ?? ""));
       setMessage(t("pos.saleComplete"));
       setCart({}); setDiscount(0); setPaid(""); setCustomerId("");
+      void refreshCashMovements();
     } catch (err) {
       if (!online || (err instanceof Error && err.message === "offline") || (err instanceof TypeError)) {
         await enqueueSale(payload, key);
@@ -263,6 +283,41 @@ export function PosScreen({
     } finally { setBusy(false); }
   }
 
+  function openCashOutDialog() {
+    setCashOutAmount("");
+    setCashOutReason("");
+    setCashOutError("");
+    setError("");
+    setCashOutOpen(true);
+  }
+
+  async function submitCashOut() {
+    setCashOutError("");
+    if (!session) { setCashOutError(t("pos.cashOutNoSession")); return; }
+    const amount = Number(cashOutAmount);
+    if (!Number.isFinite(amount) || amount <= 0) { setCashOutError(t("pos.cashOutInvalidAmount")); return; }
+    setCashOutBusy(true);
+    try {
+      const response = await fetch("/api/cash-movements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: session.id, amount, reason: cashOutReason.trim() || undefined }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error?.[locale === "ar" ? "messageAr" : "message"] ?? t("common.error"));
+      }
+      setCashOutOpen(false);
+      setInvoice("");
+      setMessage(t("pos.cashOutSuccess"));
+      await refreshCashMovements();
+    } catch (err) {
+      setCashOutError(err instanceof Error ? err.message : t("common.error"));
+    } finally {
+      setCashOutBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -291,6 +346,11 @@ export function PosScreen({
           {canOpenSession && !session ? (
             <button className="btn btn-secondary" disabled={busy || !registerId} onClick={() => void openRegister()} type="button">
               <Wallet className="h-4 w-4" /> {t("pos.openRegister")}
+            </button>
+          ) : null}
+          {canCloseSession && session ? (
+            <button className="btn btn-secondary" disabled={busy || !online} onClick={openCashOutDialog} type="button">
+              <Minus className="h-4 w-4" /> {t("pos.cashOut")}
             </button>
           ) : null}
           {canCloseSession && session ? (
@@ -419,6 +479,107 @@ export function PosScreen({
           </div>
         </section>
       </div>
+
+      {session ? (
+        <section className="card p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-bold"><Wallet className="h-4 w-4" />{t("pos.cashMovements")}</h2>
+            <span className="muted text-xs">{cashMovements.length}</span>
+          </div>
+          {cashMovements.length === 0 ? (
+            <p className="muted py-4 text-center text-sm">{t("pos.cashMovementsEmpty")}</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {cashMovements.map((movement) => {
+                const isOut = movement.kind === "OUT";
+                return (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] p-2 text-xs" key={movement.id}>
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold">
+                        {t(`pos.movement.${movement.kind}`)}
+                        {movement.reason ? <span className="muted"> · {movement.reason}</span> : null}
+                      </div>
+                      <div className="muted">{new Date(movement.createdAt).toLocaleString(locale === "ar" ? "ar-YE-u-nu-latn" : "en-US")}</div>
+                    </div>
+                    <strong className={isOut ? "text-[var(--danger)]" : "text-emerald-600"}>
+                      {isOut ? "−" : "+"}{money(Number(movement.amount))}
+                    </strong>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {cashOutOpen ? (
+        <div
+          className="arap-modal-overlay"
+          onMouseDown={(event) => { if (event.target === event.currentTarget && !cashOutBusy) setCashOutOpen(false); }}
+        >
+          <form
+            aria-labelledby="pos-cashout-title"
+            aria-modal="true"
+            className="arap-modal"
+            dir={locale === "ar" ? "rtl" : "ltr"}
+            onSubmit={(event) => { event.preventDefault(); void submitCashOut(); }}
+            role="dialog"
+          >
+            <div className="arap-modal-header">
+              <h2 className="arap-modal-title" id="pos-cashout-title">{t("pos.cashOutTitle")}</h2>
+              <button
+                aria-label={t("action.close")}
+                className="arap-modal-close"
+                disabled={cashOutBusy}
+                onClick={() => setCashOutOpen(false)}
+                type="button"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="arap-modal-body scroll-thin">
+              {cashOutError ? <p className="arap-modal-error">{cashOutError}</p> : null}
+              <label className="arap-modal-field" htmlFor="pos-cashout-amount">
+                <span className="arap-modal-label">{t("pos.cashOutAmount")}</span>
+                <span className="arap-modal-amount-wrap">
+                  <span aria-hidden="true" className="arap-modal-currency">{currency}</span>
+                  <input
+                    autoFocus
+                    className="arap-modal-input arap-modal-amount"
+                    id="pos-cashout-amount"
+                    inputMode="decimal"
+                    min="0"
+                    onChange={(event) => setCashOutAmount(event.target.value)}
+                    step="any"
+                    type="number"
+                    value={cashOutAmount}
+                  />
+                </span>
+              </label>
+              <label className="arap-modal-field" htmlFor="pos-cashout-reason">
+                <span className="arap-modal-label">{t("pos.cashOutReason")}</span>
+                <input
+                  className="arap-modal-input"
+                  id="pos-cashout-reason"
+                  maxLength={200}
+                  onChange={(event) => setCashOutReason(event.target.value)}
+                  placeholder={t("pos.cashOutReasonPlaceholder")}
+                  value={cashOutReason}
+                />
+              </label>
+              <p className="arap-modal-hint">{t("pos.cashOutHint")}</p>
+            </div>
+            <div className="arap-modal-footer">
+              <button className="arap-modal-save" disabled={cashOutBusy} type="submit">
+                {cashOutBusy ? t("common.loading") : t("pos.cashOut")}
+              </button>
+              <button className="arap-modal-cancel" disabled={cashOutBusy} onClick={() => setCashOutOpen(false)} type="button">
+                {t("action.cancel")}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }
