@@ -16,9 +16,11 @@ type StockRow = {
 type CountRow = {
   id: string;
   countNumber: string;
+  warehouseId: string;
   itemType: string;
   status: string;
   countDate: string;
+  notes: string | null;
   lines: { id: string; itemId: string; expected: string | number; counted: string | number; difference: string | number }[];
 };
 type TransferRow = {
@@ -28,6 +30,7 @@ type TransferRow = {
   itemId: string;
   fromWarehouse: string;
   toWarehouse: string;
+  notes: string | null;
   quantity: string | number;
   status: string;
 };
@@ -208,8 +211,17 @@ export function InventoryPage({ locale, canManage }: { locale: Locale; canManage
         ]}
         form={{
           title: L(locale, "جرد جديد", "New stock count"),
+          editTitle: L(locale, "تعديل الجرد", "Edit stock count"),
           endpoint: "/api/inventory/counts",
+          itemEndpoint: (row) => `/api/workflow/inventory-counts/${row.id}`,
+          itemMethod: "PATCH",
           enabled: canManage,
+          initialFromRow: (row) => ({
+            warehouseId: row.warehouseId,
+            itemType: row.itemType,
+            countDate: new Date(row.countDate).toISOString().slice(0, 10),
+            notes: row.notes ?? "",
+          }),
           fields: [
             { name: "warehouseId", label: L(locale, "المخزن", "Warehouse"), type: "select", required: true, options: warehouseOptions },
             { name: "itemType", label: L(locale, "نوع الصنف", "Item type"), type: "select", required: true, defaultValue: "RAW", options: [
@@ -241,6 +253,21 @@ export function InventoryPage({ locale, canManage }: { locale: Locale; canManage
           afterSave: async () => setCountLines([]),
         }}
         rowActions={[
+          {
+            label: L(locale, "تعديل", "Edit"),
+            kind: "edit",
+            tone: "secondary",
+            requiresManage: true,
+            visible: (row) => row.status === "DRAFT",
+          },
+          {
+            label: L(locale, "حذف", "Delete"),
+            kind: "delete",
+            tone: "danger",
+            requiresManage: true,
+            visible: (row) => row.status === "DRAFT",
+            confirm: L(locale, "هل تريد حذف هذا الجرد نهائياً؟", "Permanently delete this stock count?"),
+          },
           {
             label: L(locale, "اعتماد الجرد", "Post count"),
             tone: "primary",
@@ -277,8 +304,19 @@ export function InventoryPage({ locale, canManage }: { locale: Locale; canManage
         ]}
         form={{
           title: L(locale, "تحويل جديد", "New transfer"),
+          editTitle: L(locale, "تعديل التحويل", "Edit transfer"),
           endpoint: "/api/inventory/transfers",
+          itemEndpoint: (row) => `/api/workflow/inventory-transfers/${row.id}`,
+          itemMethod: "PATCH",
           enabled: canManage,
+          initialFromRow: (row) => ({
+            fromWarehouse: row.fromWarehouse,
+            toWarehouse: row.toWarehouse,
+            itemType: row.itemType,
+            itemId: row.itemId,
+            quantity: String(row.quantity),
+            notes: row.notes ?? "",
+          }),
           fields: [
             { name: "fromWarehouse", label: L(locale, "من المخزن", "From warehouse"), type: "select", required: true, options: warehouseOptions },
             { name: "toWarehouse", label: L(locale, "إلى المخزن", "To warehouse"), type: "select", required: true, options: warehouseOptions },
@@ -305,6 +343,23 @@ export function InventoryPage({ locale, canManage }: { locale: Locale; canManage
             notes: String(values.notes || "") || undefined,
           }),
         }}
+        rowActions={[
+          {
+            label: L(locale, "تعديل", "Edit"),
+            kind: "edit",
+            tone: "secondary",
+            requiresManage: true,
+            visible: (row) => row.status === "DRAFT",
+          },
+          {
+            label: L(locale, "حذف", "Delete"),
+            kind: "delete",
+            tone: "danger",
+            requiresManage: true,
+            visible: (row) => row.status === "DRAFT",
+            confirm: L(locale, "هل تريد حذف هذا التحويل نهائياً؟", "Permanently delete this transfer?"),
+          },
+        ]}
       />
 
       <section className="card overflow-hidden">

@@ -200,20 +200,30 @@ export type Column<T> = {
 
 export type RowAction<T> = {
   label: string;
-  run: (row: T, reload: () => Promise<void>, setError: (message: string) => void) => void | Promise<void>;
+  /** Built-in actions handled by DataPanel; `run` is used for custom actions. */
+  kind?: "edit" | "delete";
+  run?: (row: T, reload: () => Promise<void>, setError: (message: string) => void) => void | Promise<void>;
   tone?: "primary" | "secondary" | "danger";
   requiresManage?: boolean;
   visible?: (row: T) => boolean;
+  confirm?: string;
 };
 
-export type PanelForm = {
+export type PanelForm<T = unknown> = {
   title: string;
+  editTitle?: string;
+  /** Create endpoint (defaults to the panel endpoint). */
   endpoint?: string;
+  /** Edit/delete endpoint for a specific row. */
+  itemEndpoint?: (row: T) => string;
   method?: "POST" | "PATCH" | "PUT";
+  itemMethod?: "PATCH" | "PUT";
   fields: Field[];
   initial?: FormValues;
+  /** Seed the form from an existing row when editing. */
+  initialFromRow?: (row: T) => FormValues;
   extra?: (values: FormValues, setValue: (name: string, value: string | boolean) => void) => ReactNode;
-  build: (values: FormValues) => unknown;
+  build: (values: FormValues, row: T | null) => unknown;
   submitLabel?: string;
   enabled?: boolean;
   afterSave?: (result: unknown, reload: () => Promise<void>) => void | Promise<void>;
@@ -251,7 +261,7 @@ export function DataPanel<T extends { id: string }>({
   rows?: T[];
   loading?: boolean;
   reload?: () => Promise<void>;
-  form?: PanelForm;
+  form?: PanelForm<T>;
   rowActions?: RowAction<T>[];
   canManage?: boolean;
   locale: Locale;
@@ -262,6 +272,7 @@ export function DataPanel<T extends { id: string }>({
   const [internalLoading, setInternalLoading] = useState(false);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
+  const [editingRow, setEditingRow] = useState<T | null>(null);
   const [saving, setSaving] = useState(false);
   const [values, setValues] = useState<FormValues>(() => defaultValues(form?.fields ?? [], form?.initial));
   const hasControlledRows = controlledRows !== undefined;
@@ -292,10 +303,21 @@ export function DataPanel<T extends { id: string }>({
   }, [defaultExtract, endpoint, hasControlledRows, locale]);
 
   useEffect(() => { void load(); }, [load, refreshKey]);
-  useEffect(() => {
-    if (editing && form) setValues(defaultValues(form.fields, form.initial));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing]);
+
+  function openForm(row: T | null) {
+    if (!form) return;
+    setEditingRow(row);
+    setValues(row && form.initialFromRow
+      ? form.initialFromRow(row)
+      : defaultValues(form.fields, form.initial));
+    setError("");
+    setEditing(true);
+  }
+
+  function closeForm() {
+    setEditing(false);
+    setEditingRow(null);
+  }
 
   const rows = controlledRows ?? internalRows;
   const loading = controlledLoading ?? internalLoading;
@@ -311,19 +333,35 @@ export function DataPanel<T extends { id: string }>({
     setSaving(true);
     setError("");
     try {
+      const row = editingRow;
+      const url = row ? form.itemEndpoint?.(row) : (form.endpoint ?? endpoint);
+      if (!url) throw new Error(L(locale, "عنوان الحفظ غير محدد", "Save endpoint is not configured"));
       const result = await apiSend<unknown>(
-        form.endpoint ?? endpoint ?? "",
-        form.method ?? "POST",
-        form.build(values),
+        url,
+        row ? (form.itemMethod ?? "PATCH") : (form.method ?? "POST"),
+        form.build(values, row),
         locale,
       );
-      setEditing(false);
+      closeForm();
       await reload();
       await form.afterSave?.(result, reload);
     } catch (err) {
       setError(err instanceof Error ? err.message : L(locale, "تعذر حفظ البيانات", "Unable to save"));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function builtInDelete(row: T, confirm?: string) {
+    if (!form?.itemEndpoint) return;
+    if (!window.confirm(confirm ?? L(locale, "هل تريد حذف هذا السجل؟", "Delete this record?"))) return;
+    setError("");
+    try {
+      await apiFetch(form.itemEndpoint(row), locale, { method: "DELETE" });
+      await reload();
+      await form.afterSave?.(null, reload);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : L(locale, "تعذر حذف السجل", "Unable to delete record"));
     }
   }
 
@@ -338,7 +376,7 @@ export function DataPanel<T extends { id: string }>({
         </div>
         <div className="flex gap-2">
           {showForm ? (
-            <button className="btn btn-primary" onClick={() => setEditing(true)} type="button">
+            <button className="btn btn-primary" onClick={() => openForm(null)} type="button">
               <Plus className="h-4 w-4" /> {form?.submitLabel ?? L(locale, "إضافة", "Add")}
             </button>
           ) : null}
@@ -350,8 +388,8 @@ export function DataPanel<T extends { id: string }>({
       {editing && form ? (
         <form className="m-4 space-y-4 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-4" onSubmit={(event) => void submit(event)}>
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">{form.title}</h3>
-            <button className="rounded p-1 hover:bg-[var(--surface)]" onClick={() => setEditing(false)} type="button">
+            <h3 className="font-semibold">{editingRow ? (form.editTitle ?? form.title) : form.title}</h3>
+            <button className="rounded p-1 hover:bg-[var(--surface)]" onClick={closeForm} type="button">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -362,7 +400,7 @@ export function DataPanel<T extends { id: string }>({
           </div>
           {form.extra?.(values, setValue)}
           <div className="flex justify-end gap-2">
-            <button className="btn btn-secondary" onClick={() => setEditing(false)} type="button">
+            <button className="btn btn-secondary" onClick={closeForm} type="button">
               {L(locale, "إلغاء", "Cancel")}
             </button>
             <button className="btn btn-primary" disabled={saving} type="submit">
@@ -411,16 +449,23 @@ export function DataPanel<T extends { id: string }>({
                       {rowActions
                         .filter((action) => !action.requiresManage || canManage)
                         .filter((action) => !action.visible || action.visible(row))
-                        .map((action) => (
-                          <button
-                            className={cn("btn text-xs", action.tone === "danger" ? "btn-danger" : action.tone === "primary" ? "btn-primary" : "btn-secondary")}
-                            key={action.label}
-                            onClick={() => void action.run(row, reload, setError)}
-                            type="button"
-                          >
-                            {action.label}
-                          </button>
-                        ))}
+                        .map((action) => {
+                          const handler = action.kind === "edit"
+                            ? () => openForm(row)
+                            : action.kind === "delete"
+                              ? () => void builtInDelete(row, action.confirm)
+                              : () => { void action.run?.(row, reload, setError); };
+                          return (
+                            <button
+                              className={cn("btn text-xs", action.tone === "danger" ? "btn-danger" : action.tone === "primary" ? "btn-primary" : "btn-secondary")}
+                              key={action.label}
+                              onClick={handler}
+                              type="button"
+                            >
+                              {action.label}
+                            </button>
+                          );
+                        })}
                     </div>
                   </td>
                 ) : null}

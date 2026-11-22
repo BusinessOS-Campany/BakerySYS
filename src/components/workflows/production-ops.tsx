@@ -14,14 +14,20 @@ type PlanRow = {
   plannedDate: string;
   priority: string;
   status: string;
+  notes: string | null;
 };
 type BatchRow = {
   id: string;
   batchNumber: string;
   productId: string;
+  warehouseId: string;
+  sourceWarehouseId: string | null;
+  planId: string | null;
   plannedQuantity: string | number;
   actualQuantity: string | number | null;
   rejectedQuantity: string | number | null;
+  expiryDate: string | null;
+  notes: string | null;
   status: string;
   qualityApproved: boolean;
 };
@@ -68,8 +74,18 @@ export function ProductionPage({ locale, canManage, canComplete }: { locale: Loc
         ]}
         form={{
           title: L(locale, "خطة إنتاج جديدة", "New production plan"),
+          editTitle: L(locale, "تعديل خطة الإنتاج", "Edit production plan"),
           endpoint: "/api/production/plans",
+          itemEndpoint: (row) => `/api/workflow/production-plans/${row.id}`,
+          itemMethod: "PATCH",
           enabled: canManage,
+          initialFromRow: (row) => ({
+            productId: row.productId,
+            plannedQuantity: String(row.plannedQuantity),
+            plannedDate: new Date(row.plannedDate).toISOString().slice(0, 10),
+            priority: row.priority,
+            notes: row.notes ?? "",
+          }),
           fields: [
             { name: "productId", label: L(locale, "المنتج", "Product"), type: "select", required: true, options: productOptions },
             { name: "plannedQuantity", label: L(locale, "الكمية المخططة", "Planned quantity"), type: "number", required: true },
@@ -90,6 +106,21 @@ export function ProductionPage({ locale, canManage, canComplete }: { locale: Loc
           }),
         }}
         rowActions={[
+          {
+            label: L(locale, "تعديل", "Edit"),
+            kind: "edit",
+            tone: "secondary",
+            requiresManage: true,
+            visible: (row) => row.status === "PLANNED",
+          },
+          {
+            label: L(locale, "حذف", "Delete"),
+            kind: "delete",
+            tone: "danger",
+            requiresManage: true,
+            visible: (row) => row.status === "PLANNED",
+            confirm: L(locale, "هل تريد حذف خطة الإنتاج نهائياً؟", "Permanently delete this production plan?"),
+          },
           {
             label: L(locale, "اعتماد", "Approve"),
             tone: "primary",
@@ -127,14 +158,27 @@ export function ProductionPage({ locale, canManage, canComplete }: { locale: Loc
         ]}
         form={{
           title: L(locale, "دفعة جديدة", "New batch"),
+          editTitle: L(locale, "تعديل الدفعة", "Edit batch"),
           endpoint: "/api/production/batches",
+          itemEndpoint: (row) => `/api/workflow/production-batches/${row.id}`,
+          itemMethod: "PATCH",
           enabled: canManage,
+          initialFromRow: (row) => ({
+            productId: row.productId,
+            plannedQuantity: String(row.plannedQuantity),
+            warehouseId: row.warehouseId,
+            sourceWarehouseId: row.sourceWarehouseId ?? "",
+            planId: row.planId ?? "",
+            expiryDate: row.expiryDate ? new Date(row.expiryDate).toISOString().slice(0, 10) : "",
+            notes: row.notes ?? "",
+          }),
           fields: [
             { name: "productId", label: L(locale, "المنتج", "Product"), type: "select", required: true, options: productOptions },
             { name: "plannedQuantity", label: L(locale, "الكمية", "Quantity"), type: "number", required: true },
             { name: "warehouseId", label: L(locale, "مخزن المنتجات التامة", "Finished goods warehouse"), type: "select", required: true, options: warehouseOptions },
             { name: "sourceWarehouseId", label: L(locale, "مخزن المواد الخام", "Raw material warehouse"), type: "select", options: warehouseOptions },
             { name: "planId", label: L(locale, "الخطة", "Plan"), type: "select", options: plans.rows.map((plan) => ({ value: plan.id, label: `${plan.planNumber} · ${plan.plannedQuantity}` })) },
+            { name: "expiryDate", label: L(locale, "تاريخ الانتهاء", "Expiry date"), type: "date" },
             { name: "notes", label: L(locale, "ملاحظات", "Notes"), type: "textarea" },
           ],
           build: (values) => ({
@@ -143,10 +187,26 @@ export function ProductionPage({ locale, canManage, canComplete }: { locale: Loc
             warehouseId: String(values.warehouseId),
             sourceWarehouseId: String(values.sourceWarehouseId || "") || null,
             planId: String(values.planId || "") || null,
+            expiryDate: values.expiryDate ? new Date(String(values.expiryDate)).toISOString() : null,
             notes: String(values.notes || "") || undefined,
           }),
         }}
         rowActions={[
+          {
+            label: L(locale, "تعديل", "Edit"),
+            kind: "edit",
+            tone: "secondary",
+            requiresManage: true,
+            visible: (row) => row.status === "PLANNED",
+          },
+          {
+            label: L(locale, "حذف", "Delete"),
+            kind: "delete",
+            tone: "danger",
+            requiresManage: true,
+            visible: (row) => row.status === "PLANNED",
+            confirm: L(locale, "هل تريد حذف دفعة الإنتاج نهائياً؟", "Permanently delete this production batch?"),
+          },
           {
             label: L(locale, "إكمال", "Complete"),
             tone: "primary",

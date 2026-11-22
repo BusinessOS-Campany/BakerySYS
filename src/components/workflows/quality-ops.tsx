@@ -12,15 +12,23 @@ type InspectionRow = {
   referenceId: string | null;
   result: string;
   checkedAt: string;
+  standard: string | null;
+  expectedValue: string | null;
   actualResult: string | null;
+  temperature: string | number | null;
+  notes: string | null;
   correctiveAction: string | null;
 };
 type TemperatureRow = {
   id: string;
   recordedAt: string;
-  location: string | null;
+  location: string;
+  equipment: string | null;
   temperature: string | number;
-  note: string | null;
+  minAllowed: string | number | null;
+  maxAllowed: string | number | null;
+  ok: boolean;
+  notes: string | null;
 };
 
 export function QualityPage({ locale, canManage }: { locale: Locale; canManage: boolean }) {
@@ -72,11 +80,30 @@ export function QualityPage({ locale, canManage }: { locale: Locale; canManage: 
         ]}
         form={{
           title: L(locale, "فحص جديد", "New inspection"),
+          editTitle: L(locale, "تعديل الفحص", "Edit inspection"),
           endpoint: "/api/quality",
+          itemEndpoint: (row) => `/api/workflow/quality-inspections/${row.id}`,
+          itemMethod: "PATCH",
           enabled: canManage,
+          initialFromRow: (row) => {
+            setReferenceType(row.referenceType);
+            return {
+              checkType: row.checkType,
+              standard: row.standard ?? "",
+              actualResult: row.actualResult ?? "",
+              expectedValue: row.expectedValue ?? "",
+              result: row.result,
+              temperature: row.temperature == null ? "" : String(row.temperature),
+              notes: row.notes ?? "",
+              correctiveAction: row.correctiveAction ?? "",
+              referenceType: row.referenceType,
+              referenceId: row.referenceId ?? "",
+            };
+          },
           fields: [
             { name: "checkType", label: L(locale, "نوع الفحص", "Check type"), required: true, placeholder: L(locale, "مثال: حسى/ميكروبيولوجي", "e.g. sensory/microbiological") },
             { name: "standard", label: L(locale, "المعيار", "Standard") },
+            { name: "expectedValue", label: L(locale, "القيمة المتوقعة", "Expected value") },
             { name: "actualResult", label: L(locale, "النتيجة الفعلية", "Actual result") },
             { name: "result", label: L(locale, "الحكم", "Result"), type: "select", defaultValue: "PASS", options: [
               { value: "PASS", label: L(locale, "نجح", "Pass") },
@@ -110,6 +137,7 @@ export function QualityPage({ locale, canManage }: { locale: Locale; canManage: 
             referenceId: String(values.referenceId || "") || null,
             checkType: String(values.checkType),
             standard: String(values.standard || "") || undefined,
+            expectedValue: String(values.expectedValue || "") || undefined,
             actualResult: String(values.actualResult || "") || undefined,
             result: values.result === "FAIL" || values.result === "PENDING" ? String(values.result) : "PASS",
             temperature: values.temperature ? Number(values.temperature) : undefined,
@@ -118,6 +146,21 @@ export function QualityPage({ locale, canManage }: { locale: Locale; canManage: 
           }),
           afterSave: async () => setReferenceType("BATCH"),
         }}
+        rowActions={[
+          {
+            label: L(locale, "تعديل", "Edit"),
+            kind: "edit",
+            tone: "secondary",
+            requiresManage: true,
+          },
+          {
+            label: L(locale, "حذف", "Delete"),
+            kind: "delete",
+            tone: "danger",
+            requiresManage: true,
+            confirm: L(locale, "هل تريد حذف هذا الفحص نهائياً؟", "Permanently delete this inspection?"),
+          },
+        ]}
       />
 
       <DataPanel<TemperatureRow>
@@ -126,11 +169,66 @@ export function QualityPage({ locale, canManage }: { locale: Locale; canManage: 
         locale={locale}
         rows={temperatures.rows}
         loading={temperatures.loading}
+        reload={async () => { await temperatures.reload(); setRefresh((v) => v + 1); }}
+        refreshKey={refresh}
+        canManage={canManage}
         columns={[
           { key: "recordedAt", label: L(locale, "الوقت", "Time"), render: (row) => new Date(row.recordedAt).toLocaleString(numericLocale(locale)) },
           { key: "location", label: L(locale, "الموقع", "Location"), render: (row) => row.location ?? "—" },
+          { key: "equipment", label: L(locale, "الجهاز", "Equipment"), render: (row) => row.equipment ?? "—" },
           { key: "temperature", label: L(locale, "الحرارة", "Temperature") },
-          { key: "note", label: L(locale, "ملاحظة", "Note"), render: (row) => row.note ?? "—" },
+          { key: "ok", label: L(locale, "الحالة", "Status"), render: (row) => statusBadge(row.ok ? "PASS" : "FAIL", locale) },
+          { key: "notes", label: L(locale, "ملاحظة", "Note"), render: (row) => row.notes ?? "—" },
+        ]}
+        form={{
+          title: L(locale, "قراءة حرارة جديدة", "New temperature reading"),
+          editTitle: L(locale, "تعديل قراءة الحرارة", "Edit temperature reading"),
+          endpoint: "/api/quality/temperature",
+          itemEndpoint: (row) => `/api/workflow/temperature-logs/${row.id}`,
+          itemMethod: "PATCH",
+          enabled: canManage,
+          initialFromRow: (row) => ({
+            location: row.location,
+            equipment: row.equipment ?? "",
+            temperature: String(row.temperature),
+            minAllowed: row.minAllowed == null ? "" : String(row.minAllowed),
+            maxAllowed: row.maxAllowed == null ? "" : String(row.maxAllowed),
+            notes: row.notes ?? "",
+            recordedAt: new Date(row.recordedAt).toISOString().slice(0, 16),
+          }),
+          fields: [
+            { name: "location", label: L(locale, "الموقع", "Location"), required: true },
+            { name: "equipment", label: L(locale, "الجهاز", "Equipment") },
+            { name: "temperature", label: L(locale, "الحرارة (°C)", "Temperature (°C)"), type: "number", required: true },
+            { name: "minAllowed", label: L(locale, "الحد الأدنى", "Minimum"), type: "number" },
+            { name: "maxAllowed", label: L(locale, "الحد الأعلى", "Maximum"), type: "number" },
+            { name: "recordedAt", label: L(locale, "الوقت", "Time"), type: "datetime" },
+            { name: "notes", label: L(locale, "ملاحظات", "Notes"), type: "textarea" },
+          ],
+          build: (values) => ({
+            location: String(values.location),
+            equipment: String(values.equipment || "") || undefined,
+            temperature: Number(values.temperature),
+            minAllowed: values.minAllowed ? Number(values.minAllowed) : undefined,
+            maxAllowed: values.maxAllowed ? Number(values.maxAllowed) : undefined,
+            recordedAt: values.recordedAt ? new Date(String(values.recordedAt)).toISOString() : undefined,
+            notes: String(values.notes || "") || undefined,
+          }),
+        }}
+        rowActions={[
+          {
+            label: L(locale, "تعديل", "Edit"),
+            kind: "edit",
+            tone: "secondary",
+            requiresManage: true,
+          },
+          {
+            label: L(locale, "حذف", "Delete"),
+            kind: "delete",
+            tone: "danger",
+            requiresManage: true,
+            confirm: L(locale, "هل تريد حذف قراءة الحرارة نهائياً؟", "Permanently delete this reading?"),
+          },
         ]}
       />
     </div>

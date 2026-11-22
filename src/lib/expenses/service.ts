@@ -68,6 +68,117 @@ export async function createExpense(tx: Db, input: {
   return postedExpense;
 }
 
+async function resolveExpenseAccount(tx: Db, tenantId: string, input: {
+  categoryId?: string | null;
+  accountId?: string | null;
+}) {
+  let accountId = input.accountId ?? null;
+  if (!accountId && input.categoryId) {
+    const category = await tx.expenseCategory.findFirst({
+      where: { id: input.categoryId, tenantId },
+      select: { accountId: true },
+    });
+    if (!category) throw new AppError("NOT_FOUND", "Expense category not found", "تصنيف المصروف غير موجود");
+    accountId = category.accountId;
+  }
+  return accountId;
+}
+
+/** Amends a posted expense and keeps the ledger in balance by reversing and reposting its journal. */
+export async function updateExpense(tx: Db, input: {
+  tenantId: string;
+  expenseId: string;
+  recordedBy: string;
+  branchId: string | null;
+  categoryId?: string | null;
+  accountId?: string | null;
+  expenseDate?: Date;
+  amount: number;
+  taxAmount?: number;
+  vendor?: string | null;
+  description?: string | null;
+  method?: string;
+}) {
+  const expense = await tx.expense.findFirst({
+    where: { id: input.expenseId, tenantId: input.tenantId },
+  });
+  if (!expense) throw new AppError("NOT_FOUND", "Expense not found", "المصروف غير موجود");
+  if (expense.status === "VOID") {
+    throw new AppError("INVALID_STATE", "Void expense cannot be edited", "لا يمكن تعديل مصروف ملغي");
+  }
+  const amount = round(input.amount, 6);
+  if (amount <= 0) throw new AppError("VALIDATION", "Amount must be positive", "المبلغ يجب أن يكون موجباً");
+  const accountId = await resolveExpenseAccount(tx, input.tenantId, input);
+  const expenseDate = input.expenseDate ?? expense.expenseDate;
+  const method = input.method ?? expense.method;
+
+  if (expense.journalId) {
+    await reverseJournal(tx, {
+      tenantId: input.tenantId,
+      entryId: expense.journalId,
+      createdById: input.recordedBy,
+      description: `Amend expense ${expense.number}`,
+    });
+  }
+  await tx.expense.update({
+    where: { id: expense.id },
+    data: {
+      branchId: input.branchId,
+      categoryId: input.categoryId ?? null,
+      accountId: accountId ?? null,
+      expenseDate,
+      amount,
+      taxAmount: round(input.taxAmount ?? 0, 6),
+      vendor: input.vendor ?? null,
+      description: input.description ?? null,
+      method,
+      journalId: null,
+    },
+  });
+  const paymentCode = method === "BANK_TRANSFER" || method === "CARD"
+    ? ACCOUNT_CODES.BANK
+    : ACCOUNT_CODES.CASH;
+  const journal = await postJournal(tx, {
+    tenantId: input.tenantId,
+    branchId: input.branchId,
+    date: expenseDate,
+    description: `Expense ${expense.number}${input.description ? ` — ${input.description}` : ""}`,
+    referenceType: "EXPENSE",
+    referenceId: expense.id,
+    createdById: input.recordedBy,
+    lines: [
+      { accountId: accountId ?? undefined, code: accountId ? undefined : ACCOUNT_CODES.OPERATING_EXPENSE, debit: amount, credit: 0 },
+      { code: paymentCode, debit: 0, credit: amount },
+    ],
+  });
+  return tx.expense.update({
+    where: { id: expense.id },
+    data: { journalId: journal.id },
+  });
+}
+
+/** Hard-deletes an expense after reversing its ledger impact (history is preserved as a reversal entry). */
+export async function deleteExpense(tx: Db, input: {
+  tenantId: string;
+  expenseId: string;
+  recordedBy: string;
+}) {
+  const expense = await tx.expense.findFirst({
+    where: { id: input.expenseId, tenantId: input.tenantId },
+  });
+  if (!expense) throw new AppError("NOT_FOUND", "Expense not found", "المصروف غير موجود");
+  if (expense.journalId) {
+    await reverseJournal(tx, {
+      tenantId: input.tenantId,
+      entryId: expense.journalId,
+      createdById: input.recordedBy,
+      description: `Delete expense ${expense.number}`,
+    });
+  }
+  await tx.expense.delete({ where: { id: expense.id } });
+  return { id: expense.id };
+}
+
 export async function voidExpense(tx: Db, input: {
   tenantId: string;
   expenseId: string;

@@ -9,11 +9,14 @@ type ExpenseRow = {
   id: string;
   expenseNumber: string;
   expenseDate: string;
+  categoryId?: string | null;
+  accountId?: string | null;
   categoryName: string | null;
   vendor: string | null;
   amount: string | number;
   taxAmount: string | number;
   description: string | null;
+  method?: string;
   status: string;
   source?: "EXPENSE" | "CASH_MOVEMENT";
   isCashOut?: boolean;
@@ -71,8 +74,21 @@ export function ExpensesPage({ locale, canManage }: { locale: Locale; canManage:
         ]}
         form={{
           title: L(locale, "مصروف جديد", "New expense"),
+          editTitle: L(locale, "تعديل المصروف", "Edit expense"),
           endpoint: "/api/expenses",
+          itemEndpoint: (row) => `/api/expenses/${row.id}`,
+          itemMethod: "PATCH",
           enabled: canManage,
+          initialFromRow: (row) => ({
+            amount: String(row.amount),
+            expenseDate: new Date(row.expenseDate).toISOString().slice(0, 10),
+            categoryId: row.categoryId ?? "",
+            accountId: row.accountId ?? "",
+            vendor: row.vendor ?? "",
+            taxAmount: String(row.taxAmount ?? 0),
+            method: String(row.method ?? "CASH"),
+            description: row.description ?? "",
+          }),
           fields: [
             { name: "amount", label: L(locale, "المبلغ", "Amount"), type: "number", required: true },
             { name: "expenseDate", label: L(locale, "التاريخ", "Date"), type: "date" },
@@ -100,6 +116,21 @@ export function ExpensesPage({ locale, canManage }: { locale: Locale; canManage:
           }),
         }}
         rowActions={[
+          {
+            label: L(locale, "تعديل", "Edit"),
+            kind: "edit",
+            tone: "secondary",
+            requiresManage: true,
+            visible: (row) => !row.isCashOut && row.status !== "VOID",
+          },
+          {
+            label: L(locale, "حذف", "Delete"),
+            kind: "delete",
+            tone: "danger",
+            requiresManage: true,
+            visible: (row) => !row.isCashOut,
+            confirm: L(locale, "هل تريد حذف هذا المصروف نهائياً؟", "Permanently delete this expense?"),
+          },
           {
             label: L(locale, "إلغاء", "Void"),
             tone: "danger",

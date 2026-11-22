@@ -63,3 +63,45 @@ export const PATCH = apiRoute({
     return serialize(updated);
   },
 });
+
+export const DELETE = apiRoute({
+  permission: "users.manage",
+  handler: async (_input, auth, _req, ctx) => {
+    const { id } = await ctx.params;
+    if (id === auth.user.id) {
+      throw new AppError("VALIDATION", "You cannot delete your own account", "لا يمكنك حذف حسابك");
+    }
+    const user = await db.user.findFirst({
+      where: { id, tenantId: auth.user.tenantId },
+      select: { id: true },
+    });
+    if (!user) throw new AppError("NOT_FOUND", "User not found", "المستخدم غير موجود");
+
+    const ownerRole = await db.role.findFirst({
+      where: { tenantId: auth.user.tenantId, code: "OWNER" },
+      select: { id: true },
+    });
+    if (ownerRole) {
+      const isOwner = await db.userRole.count({
+        where: { tenantId: auth.user.tenantId, roleId: ownerRole.id, userId: id },
+      });
+      if (isOwner) {
+        const otherOwners = await db.userRole.count({
+          where: { tenantId: auth.user.tenantId, roleId: ownerRole.id, userId: { not: id } },
+        });
+        if (otherOwners === 0) {
+          throw new AppError("VALIDATION", "Cannot delete the last owner", "لا يمكن حذف آخر مالك للنظام");
+        }
+      }
+    }
+
+    await db.$transaction(async (tx) => {
+      await tx.session.deleteMany({ where: { tenantId: auth.user.tenantId, userId: id } });
+      await tx.passwordResetToken.deleteMany({ where: { tenantId: auth.user.tenantId, userId: id } });
+      await tx.userRole.deleteMany({ where: { tenantId: auth.user.tenantId, userId: id } });
+      await tx.userBranchAccess.deleteMany({ where: { tenantId: auth.user.tenantId, userId: id } });
+      await tx.user.delete({ where: { id } });
+    });
+    return serialize({ id });
+  },
+});

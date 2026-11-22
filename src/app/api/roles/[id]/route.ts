@@ -42,3 +42,26 @@ export const PATCH = apiRoute({
     return serialize(updated);
   },
 });
+
+export const DELETE = apiRoute({
+  permission: "users.manage",
+  handler: async (_input, auth, _req, ctx) => {
+    const { id } = await ctx.params;
+    const role = await db.role.findFirst({ where: { id, tenantId: auth.user.tenantId } });
+    if (!role) throw new AppError("NOT_FOUND", "Role not found", "الدور غير موجود");
+    if (role.code === "OWNER" || role.isSystem) {
+      throw new AppError("FORBIDDEN", "System role cannot be deleted", "لا يمكن حذف دور النظام");
+    }
+    const assigned = await db.userRole.count({
+      where: { tenantId: auth.user.tenantId, roleId: id },
+    });
+    if (assigned > 0) {
+      throw new AppError("CONFLICT", "Role is still assigned to users", "الدور لا يزال مُسنداً إلى مستخدمين");
+    }
+    await db.$transaction(async (tx) => {
+      await tx.rolePermission.deleteMany({ where: { tenantId: auth.user.tenantId, roleId: id } });
+      await tx.role.delete({ where: { id } });
+    });
+    return serialize({ id });
+  },
+});

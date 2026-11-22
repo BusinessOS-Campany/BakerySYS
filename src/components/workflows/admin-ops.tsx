@@ -16,7 +16,7 @@ type UserRow = {
   lastLoginAt: string | null;
 };
 type UserRoleRow = { id: string; userId: string; roleId: string; branchId: string | null };
-type RoleRow = { id: string; code: string; nameAr: string; nameEn: string; isSystem: boolean; permissionCodes: string[] };
+type RoleRow = { id: string; code: string; nameAr: string; nameEn: string; description?: string | null; isSystem: boolean; permissionCodes: string[] };
 type UsersPayload = {
   users: UserRow[];
   userRoles: UserRoleRow[];
@@ -122,6 +122,20 @@ export function UsersPage({ locale, canManage }: { locale: Locale; canManage: bo
             tone: "secondary",
             requiresManage: true,
             run: (row) => setEditing(row),
+          },
+          {
+            label: L(locale, "حذف", "Delete"),
+            tone: "danger",
+            requiresManage: true,
+            run: async (row, reloadFn, setError) => {
+              if (!window.confirm(L(locale, "هل تريد حذف المستخدم نهائياً؟", "Permanently delete this user?"))) return;
+              try {
+                await apiFetch(`/api/users/${row.id}`, locale, { method: "DELETE" });
+                await reloadFn();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : String(err));
+              }
+            },
           },
         ]}
       />
@@ -281,8 +295,20 @@ function RolesPanel({ locale, canManage, refresh }: { locale: Locale; canManage:
         ]}
         form={{
           title: L(locale, "دور جديد", "New role"),
+          editTitle: L(locale, "تعديل الدور", "Edit role"),
           endpoint: "/api/roles",
+          itemEndpoint: (row) => `/api/roles/${row.id}`,
+          itemMethod: "PATCH",
           enabled: canManage,
+          initialFromRow: (row) => {
+            setPermissions(row.permissionCodes);
+            return {
+              code: row.code,
+              nameAr: row.nameAr,
+              nameEn: row.nameEn,
+              description: row.description ?? "",
+            };
+          },
           fields: [
             { name: "code", label: L(locale, "الرمز", "Code"), required: true },
             { name: "nameAr", label: L(locale, "الاسم (عربي)", "Name (Arabic)"), required: true },
@@ -305,6 +331,30 @@ function RolesPanel({ locale, canManage, refresh }: { locale: Locale; canManage:
           }),
           afterSave: async () => { setPermissions([]); await load(); },
         }}
+        rowActions={[
+          {
+            label: L(locale, "تعديل", "Edit"),
+            kind: "edit",
+            tone: "secondary",
+            requiresManage: true,
+            visible: (row) => row.code !== "OWNER",
+          },
+          {
+            label: L(locale, "حذف", "Delete"),
+            tone: "danger",
+            requiresManage: true,
+            visible: (row) => row.code !== "OWNER",
+            run: async (row, reloadFn, setError) => {
+              if (!window.confirm(L(locale, "هل تريد حذف هذا الدور نهائياً؟", "Permanently delete this role?"))) return;
+              try {
+                await apiFetch(`/api/roles/${row.id}`, locale, { method: "DELETE" });
+                await reloadFn();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : String(err));
+              }
+            },
+          },
+        ]}
       />
     </div>
   );

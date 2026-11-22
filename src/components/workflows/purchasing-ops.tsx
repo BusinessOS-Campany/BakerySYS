@@ -12,6 +12,7 @@ type PurchaseOrderRow = {
   supplierId: string;
   supplierName: string;
   expectedDate: string | null;
+  notes: string | null;
   status: string;
   total: string | number;
   lines: { id: string; ingredientId: string; quantity: string | number; unitPrice: string | number }[];
@@ -72,8 +73,16 @@ export function PurchasesPage({ locale, canManage, canApprove }: { locale: Local
         ]}
         form={{
           title: L(locale, "أمر شراء جديد", "New purchase order"),
+          editTitle: L(locale, "تعديل أمر الشراء", "Edit purchase order"),
           endpoint: "/api/purchasing/orders",
+          itemEndpoint: (row) => `/api/workflow/purchasing-orders/${row.id}`,
+          itemMethod: "PATCH",
           enabled: canManage,
+          initialFromRow: (row) => ({
+            supplierId: row.supplierId,
+            expectedDate: row.expectedDate ? new Date(row.expectedDate).toISOString().slice(0, 10) : "",
+            notes: row.notes ?? "",
+          }),
           fields: [
             { name: "supplierId", label: L(locale, "المورد", "Supplier"), type: "select", required: true, options: supplierOptions },
             { name: "warehouseId", label: L(locale, "مخزن الاستلام", "Receiving warehouse"), type: "select", required: true, options: warehouseOptions },
@@ -105,6 +114,21 @@ export function PurchasesPage({ locale, canManage, canApprove }: { locale: Local
           afterSave: async () => setOrderLines([{ key: crypto.randomUUID(), quantity: "1", unitPrice: "0" }]),
         }}
         rowActions={[
+          {
+            label: L(locale, "تعديل", "Edit"),
+            kind: "edit",
+            tone: "secondary",
+            requiresManage: true,
+            visible: (row) => row.status === "DRAFT",
+          },
+          {
+            label: L(locale, "حذف", "Delete"),
+            kind: "delete",
+            tone: "danger",
+            requiresManage: true,
+            visible: (row) => row.status === "DRAFT",
+            confirm: L(locale, "هل تريد حذف أمر الشراء نهائياً؟", "Permanently delete this purchase order?"),
+          },
           {
             label: L(locale, "اعتماد", "Approve"),
             tone: "primary",
