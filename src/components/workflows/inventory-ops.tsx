@@ -1,414 +1,302 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  apiFetch, apiSend, DataPanel, FieldInput, L, LineItemsEditor, lookupLabel, lookupOptions,
-  numericLocale, statusBadge, useList, useLookups, type Field, type LineItem, type Locale,
-} from "./shared";
+import { useCallback, useEffect, useMemo, useState, type ComponentType, type FormEvent } from "react";
+import { AlertCircle, Boxes, Check, Layers, Package, Plus, RefreshCw, Wheat } from "lucide-react";
+import { apiFetch, apiSend, L } from "./shared";
+import { formatNumber, type Locale } from "@/lib/i18n/dictionary";
 
-type StockRow = {
+type IngredientLot = {
   id: string;
-  itemType: "RAW" | "FINISHED";
-  itemId: string;
   warehouseId: string;
+  ingredientId: string;
+  lotNumber: string;
   quantity: string | number;
+  initialQty: string | number;
+  unitCost: string | number;
+  itemState?: string;
+  cleaned?: boolean;
+  receivedAt: string;
+  expiryDate: string | null;
 };
-type CountRow = {
-  id: string;
-  countNumber: string;
-  warehouseId: string;
-  itemType: string;
-  status: string;
-  countDate: string;
-  notes: string | null;
-  lines: { id: string; itemId: string; expected: string | number; counted: string | number; difference: string | number }[];
-};
-type TransferRow = {
-  id: string;
-  transferNumber: string;
-  itemType: string;
-  itemId: string;
-  fromWarehouse: string;
-  toWarehouse: string;
-  notes: string | null;
-  quantity: string | number;
-  status: string;
-};
-type AdjustmentRow = {
-  id: string;
-  reason: string;
-  itemType: string;
-  itemId: string;
-  quantity: string | number;
-  createdAt: string;
-};
-type LowStockRow = {
-  id: string;
-  nameAr: string;
-  nameEn: string;
-  current: string | number;
-  minimum: string | number;
-};
+
+type IngredientOption = { id: string; nameAr: string; nameEn: string; sku: string };
+type WarehouseOption = { id: string; nameAr?: string | null; nameEn?: string | null };
+
 type InventoryPayload = {
-  ingredientStocks: { id: string; ingredientId: string; warehouseId: string; quantity: string | number }[];
-  finishedStocks: { id: string; productId: string; warehouseId: string; quantity: string | number }[];
-  ingredientLots: { id: string }[];
-  finishedLots: { id: string }[];
-  adjustments: AdjustmentRow[];
-  lowStock: Omit<LowStockRow, "id">[];
-  ingredients: { id: string; nameAr: string; nameEn: string; sku: string }[];
-  products: { id: string; nameAr: string; nameEn: string; sku: string }[];
-  warehouses: { id: string; nameAr: string; nameEn: string }[];
+  ingredientLots: IngredientLot[];
+  ingredients: IngredientOption[];
+  warehouses: WarehouseOption[];
 };
 
 export function InventoryPage({ locale, canManage }: { locale: Locale; canManage: boolean }) {
-  const [refresh, setRefresh] = useState(0);
   const [data, setData] = useState<InventoryPayload | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [countLines, setCountLines] = useState<LineItem[]>([]);
-  const [movementType, setMovementType] = useState<"RAW" | "FINISHED">("RAW");
-  const lookups = useLookups(["warehouses", "ingredients", "products"], locale);
-  const warehouseOptions = lookupOptions(lookups.warehouses ?? [], locale);
-  const ingredientOptions = lookupOptions(lookups.ingredients ?? [], locale);
-  const productOptions = lookupOptions(lookups.products ?? [], locale);
+  const [message, setMessage] = useState("");
+  const [ingredientId, setIngredientId] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [itemState, setItemState] = useState<"GRAINS" | "GROUND">("GRAINS");
+  const [cleaned, setCleaned] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    void apiFetch<InventoryPayload>("/api/inventory", locale)
-      .then((payload) => { if (active) setData(payload); })
-      .catch((err: unknown) => { if (active) setError(err instanceof Error ? err.message : String(err)); });
-    return () => { active = false; };
-  }, [locale, refresh]);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setData(await apiFetch<InventoryPayload>("/api/inventory", locale));
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [locale]);
 
-  const reload = async () => setRefresh((v) => v + 1);
-  const ingredientLookup = data?.ingredients ?? lookups.ingredients ?? [];
-  const productLookup = data?.products ?? lookups.products ?? [];
-  const warehouseLookup = data?.warehouses ?? lookups.warehouses ?? [];
+  useEffect(() => { void load(); }, [load]);
 
-  const stockRows = useMemo<StockRow[]>(() => [
-    ...(data?.ingredientStocks ?? []).map((stock) => ({
-      id: `raw-${stock.id}`, itemType: "RAW" as const, itemId: stock.ingredientId,
-      warehouseId: stock.warehouseId, quantity: stock.quantity,
-    })),
-    ...(data?.finishedStocks ?? []).map((stock) => ({
-      id: `finished-${stock.id}`, itemType: "FINISHED" as const, itemId: stock.productId,
-      warehouseId: stock.warehouseId, quantity: stock.quantity,
-    })),
-  ], [data]);
-
-  const counts = useList<CountRow>("/api/inventory/counts", undefined, locale, refresh);
-  const transfers = useList<TransferRow>("/api/inventory/transfers", undefined, locale, refresh);
-  const movements = useList<{ id: string; createdAt: string; reference: string; quantity: string | number; direction: string }>(
-    `/api/inventory/movements?type=${movementType}`, undefined, locale, `${refresh}-${movementType}`,
+  const lots = useMemo(
+    () => [...(data?.ingredientLots ?? [])].sort(
+      (a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime(),
+    ),
+    [data],
   );
+  const totalQuantity = lots.reduce((sum, lot) => sum + Number(lot.quantity), 0);
+  const grainsCount = lots.filter((lot) => (lot.itemState ?? "GRAINS") === "GRAINS").length;
+  const groundCount = lots.length - grainsCount;
+  const cleanedCount = lots.filter((lot) => lot.cleaned).length;
 
-  const itemOptions = (type: unknown) => (type === "RAW" ? ingredientOptions : productOptions);
-  const itemName = (type: unknown, id: unknown) => type === "RAW"
-    ? lookupLabel(ingredientLookup, id, locale)
-    : lookupLabel(productLookup, id, locale);
+  function ingredientName(id: string) {
+    const item = data?.ingredients.find((entry) => entry.id === id);
+    if (!item) return "—";
+    return locale === "ar" ? item.nameAr : item.nameEn;
+  }
+
+  function warehouseName(id: string) {
+    const item = data?.warehouses.find((entry) => entry.id === id);
+    if (!item) return L(locale, "مخزن غير معروف", "Unknown warehouse");
+    return locale === "ar" ? item.nameAr ?? item.nameEn : item.nameEn ?? item.nameAr;
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    const amount = Number(quantity);
+    if (!ingredientId) { setError(L(locale, "اختر اسم المنتج", "Select a product")); return; }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError(L(locale, "أدخل كمية صحيحة", "Enter a valid quantity"));
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiSend("/api/inventory/add-stock", "POST", {
+        ingredientId, quantity: amount, itemState, cleaned,
+      }, locale);
+      setMessage(L(locale, "تمت إضافة الكمية إلى المخزون", "Stock added"));
+      setQuantity("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">{L(locale, "المخزون", "Inventory")}</h1>
-        <p className="muted mt-1 text-sm">
-          {L(locale, "الأرصدة، الجرد، التحويلات، وحركة المواد", "Balances, counts, transfers and stock movements")}
-        </p>
-      </div>
-      {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard title={L(locale, "أصناف المواد الخام", "Raw materials")} value={String(data?.ingredientStocks.length ?? 0)} />
-        <SummaryCard title={L(locale, "أصناف المنتجات التامة", "Finished goods")} value={String(data?.finishedStocks.length ?? 0)} />
-        <SummaryCard title={L(locale, "دفعات المواد الخام", "Ingredient lots")} value={String(data?.ingredientLots.length ?? 0)} />
-        <SummaryCard title={L(locale, "تنبيهات النقص", "Low stock alerts")} value={String(data?.lowStock.length ?? 0)} tone="text-[var(--danger)]" />
-      </div>
-
-      <DataPanel<StockRow>
-        title={L(locale, "أرصدة المخزون", "Stock balances")}
-        locale={locale}
-        rows={stockRows}
-        loading={!data}
-        reload={reload}
-        columns={[
-          { key: "itemType", label: L(locale, "النوع", "Type"), render: (row) => row.itemType === "RAW" ? L(locale, "خام", "Raw") : L(locale, "تام", "Finished") },
-          { key: "itemId", label: L(locale, "الصنف", "Item"), render: (row) => itemName(row.itemType, row.itemId) },
-          { key: "warehouseId", label: L(locale, "المخزن", "Warehouse"), render: (row) => lookupLabel(warehouseLookup, row.warehouseId, locale) },
-          { key: "quantity", label: L(locale, "الكمية", "Quantity") },
-        ]}
-      />
-
-      <DataPanel<LowStockRow>
-        title={L(locale, "تنبيهات الحد الأدنى", "Minimum stock alerts")}
-        locale={locale}
-        rows={(data?.lowStock ?? []).map((row, index) => ({ ...row, id: `low-${index}` }))}
-        loading={!data}
-        columns={[
-          { key: "nameAr", label: L(locale, "الصنف", "Item"), render: (row) => locale === "ar" ? row.nameAr : row.nameEn },
-          { key: "current", label: L(locale, "الحالي", "Current") },
-          { key: "minimum", label: L(locale, "الحد الأدنى", "Minimum") },
-        ]}
-      />
-
-      <DataPanel<AdjustmentRow>
-        title={L(locale, "تعديلات المخزون", "Stock adjustments")}
-        locale={locale}
-        rows={data?.adjustments ?? []}
-        loading={!data}
-        reload={reload}
-        canManage={canManage}
-        columns={[
-          { key: "createdAt", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.createdAt).toLocaleString(numericLocale(locale)) },
-          { key: "itemType", label: L(locale, "النوع", "Type") },
-          { key: "itemId", label: L(locale, "الصنف", "Item"), render: (row) => itemName(row.itemType, row.itemId) },
-          { key: "quantity", label: L(locale, "الكمية", "Quantity"), render: (row) => Number(row.quantity) > 0 ? `+${row.quantity}` : String(row.quantity) },
-          { key: "reason", label: L(locale, "السبب", "Reason") },
-        ]}
-        form={{
-          title: L(locale, "تعديل جديد", "New adjustment"),
-          endpoint: "/api/inventory/adjustments",
-          enabled: canManage,
-          fields: [
-            { name: "warehouseId", label: L(locale, "المخزن", "Warehouse"), type: "select", required: true, options: warehouseOptions },
-            { name: "itemType", label: L(locale, "نوع الصنف", "Item type"), type: "select", required: true, defaultValue: "RAW", options: [
-              { value: "RAW", label: L(locale, "مادة خام", "Raw material") },
-              { value: "FINISHED", label: L(locale, "منتج تام", "Finished good") },
-            ] },
-            { name: "quantity", label: L(locale, "الكمية (+ أو -)", "Quantity (+/-)"), type: "number", required: true },
-            { name: "reason", label: L(locale, "السبب", "Reason"), required: true },
-          ],
-          extra: (values, setValue) => (
-            <FieldInput
-              field={{ name: "itemId", label: L(locale, "الصنف", "Item"), type: "select", required: true, options: itemOptions(values.itemType) }}
-              onChange={(value) => setValue("itemId", value)}
-              value={String(values.itemId ?? "")}
-            />
-          ),
-          build: (values) => ({
-            warehouseId: String(values.warehouseId),
-            itemType: values.itemType === "FINISHED" ? "FINISHED" : "RAW",
-            itemId: String(values.itemId || ""),
-            quantity: Number(values.quantity),
-            reason: String(values.reason),
-          }),
-        }}
-      />
-
-      <DataPanel<CountRow>
-        title={L(locale, "جرد المخزون", "Stock counts")}
-        endpoint="/api/inventory/counts"
-        locale={locale}
-        rows={counts.rows}
-        loading={counts.loading}
-        reload={async () => { await counts.reload(); await reload(); }}
-        canManage={canManage}
-        columns={[
-          { key: "countNumber", label: L(locale, "رقم الجرد", "Count") },
-          { key: "countDate", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.countDate).toLocaleDateString(numericLocale(locale)) },
-          { key: "itemType", label: L(locale, "النوع", "Type") },
-          { key: "lines", label: L(locale, "البنود", "Lines"), render: (row) => row.lines?.length ?? 0 },
-          { key: "status", label: L(locale, "الحالة", "Status"), render: (row) => statusBadge(row.status, locale) },
-        ]}
-        form={{
-          title: L(locale, "جرد جديد", "New stock count"),
-          editTitle: L(locale, "تعديل الجرد", "Edit stock count"),
-          endpoint: "/api/inventory/counts",
-          itemEndpoint: (row) => `/api/workflow/inventory-counts/${row.id}`,
-          itemMethod: "PATCH",
-          enabled: canManage,
-          initialFromRow: (row) => ({
-            warehouseId: row.warehouseId,
-            itemType: row.itemType,
-            countDate: new Date(row.countDate).toISOString().slice(0, 10),
-            notes: row.notes ?? "",
-          }),
-          fields: [
-            { name: "warehouseId", label: L(locale, "المخزن", "Warehouse"), type: "select", required: true, options: warehouseOptions },
-            { name: "itemType", label: L(locale, "نوع الصنف", "Item type"), type: "select", required: true, defaultValue: "RAW", options: [
-              { value: "RAW", label: L(locale, "مادة خام", "Raw material") },
-              { value: "FINISHED", label: L(locale, "منتج تام", "Finished good") },
-            ] },
-            { name: "countDate", label: L(locale, "تاريخ الجرد", "Count date"), type: "date" },
-            { name: "notes", label: L(locale, "ملاحظات", "Notes"), type: "textarea" },
-          ],
-          extra: (values) => (
-            <LineItemsEditor
-              itemOptions={itemOptions(values.itemType)}
-              lines={countLines}
-              locale={locale}
-              includePrice={false}
-              onChange={setCountLines}
-            />
-          ),
-          build: (values) => ({
-            warehouseId: String(values.warehouseId),
-            itemType: values.itemType === "FINISHED" ? "FINISHED" : "RAW",
-            countDate: values.countDate ? new Date(String(values.countDate)).toISOString() : undefined,
-            notes: String(values.notes || "") || undefined,
-            lines: countLines.filter((line) => line.ingredientId || line.productId).map((line) => ({
-              itemId: String(line.ingredientId ?? line.productId),
-              counted: Number(line.quantity),
-            })),
-          }),
-          afterSave: async () => setCountLines([]),
-        }}
-        rowActions={[
-          {
-            label: L(locale, "تعديل", "Edit"),
-            kind: "edit",
-            tone: "secondary",
-            requiresManage: true,
-            visible: (row) => row.status === "DRAFT",
-          },
-          {
-            label: L(locale, "حذف", "Delete"),
-            kind: "delete",
-            tone: "danger",
-            requiresManage: true,
-            visible: (row) => row.status === "DRAFT",
-            confirm: L(locale, "هل تريد حذف هذا الجرد نهائياً؟", "Permanently delete this stock count?"),
-          },
-          {
-            label: L(locale, "اعتماد الجرد", "Post count"),
-            tone: "primary",
-            requiresManage: true,
-            visible: (row) => canManage && row.status === "DRAFT",
-            run: async (row, reloadFn, setFormError) => {
-              try {
-                await apiSend(`/api/inventory/counts/${row.id}/post`, "POST", {}, locale);
-                await reloadFn();
-                await reload();
-              } catch (err) {
-                setFormError(err instanceof Error ? err.message : String(err));
-              }
-            },
-          },
-        ]}
-      />
-
-      <DataPanel<TransferRow>
-        title={L(locale, "تحويلات المخزون", "Warehouse transfers")}
-        endpoint="/api/inventory/transfers"
-        locale={locale}
-        rows={transfers.rows}
-        loading={transfers.loading}
-        reload={async () => { await transfers.reload(); await reload(); }}
-        canManage={canManage}
-        columns={[
-          { key: "transferNumber", label: L(locale, "رقم التحويل", "Transfer") },
-          { key: "itemType", label: L(locale, "النوع", "Type") },
-          { key: "itemId", label: L(locale, "الصنف", "Item"), render: (row) => itemName(row.itemType, row.itemId) },
-          { key: "fromWarehouse", label: L(locale, "من", "From"), render: (row) => lookupLabel(warehouseLookup, row.fromWarehouse, locale) },
-          { key: "toWarehouse", label: L(locale, "إلى", "To"), render: (row) => lookupLabel(warehouseLookup, row.toWarehouse, locale) },
-          { key: "quantity", label: L(locale, "الكمية", "Quantity") },
-        ]}
-        form={{
-          title: L(locale, "تحويل جديد", "New transfer"),
-          editTitle: L(locale, "تعديل التحويل", "Edit transfer"),
-          endpoint: "/api/inventory/transfers",
-          itemEndpoint: (row) => `/api/workflow/inventory-transfers/${row.id}`,
-          itemMethod: "PATCH",
-          enabled: canManage,
-          initialFromRow: (row) => ({
-            fromWarehouse: row.fromWarehouse,
-            toWarehouse: row.toWarehouse,
-            itemType: row.itemType,
-            itemId: row.itemId,
-            quantity: String(row.quantity),
-            notes: row.notes ?? "",
-          }),
-          fields: [
-            { name: "fromWarehouse", label: L(locale, "من المخزن", "From warehouse"), type: "select", required: true, options: warehouseOptions },
-            { name: "toWarehouse", label: L(locale, "إلى المخزن", "To warehouse"), type: "select", required: true, options: warehouseOptions },
-            { name: "itemType", label: L(locale, "نوع الصنف", "Item type"), type: "select", required: true, defaultValue: "RAW", options: [
-              { value: "RAW", label: L(locale, "مادة خام", "Raw material") },
-              { value: "FINISHED", label: L(locale, "منتج تام", "Finished good") },
-            ] },
-            { name: "quantity", label: L(locale, "الكمية", "Quantity"), type: "number", required: true },
-            { name: "notes", label: L(locale, "ملاحظات", "Notes"), type: "textarea" },
-          ],
-          extra: (values, setValue) => (
-            <FieldInput
-              field={{ name: "itemId", label: L(locale, "الصنف", "Item"), type: "select", required: true, options: itemOptions(values.itemType) }}
-              onChange={(value) => setValue("itemId", value)}
-              value={String(values.itemId ?? "")}
-            />
-          ),
-          build: (values) => ({
-            fromWarehouse: String(values.fromWarehouse),
-            toWarehouse: String(values.toWarehouse),
-            itemType: values.itemType === "FINISHED" ? "FINISHED" : "RAW",
-            itemId: String(values.itemId || ""),
-            quantity: Number(values.quantity),
-            notes: String(values.notes || "") || undefined,
-          }),
-        }}
-        rowActions={[
-          {
-            label: L(locale, "تعديل", "Edit"),
-            kind: "edit",
-            tone: "secondary",
-            requiresManage: true,
-            visible: (row) => row.status === "DRAFT",
-          },
-          {
-            label: L(locale, "حذف", "Delete"),
-            kind: "delete",
-            tone: "danger",
-            requiresManage: true,
-            visible: (row) => row.status === "DRAFT",
-            confirm: L(locale, "هل تريد حذف هذا التحويل نهائياً؟", "Permanently delete this transfer?"),
-          },
-        ]}
-      />
-
-      <section className="card overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] p-4">
-          <h2 className="text-base font-bold">{L(locale, "حركة المخزون", "Stock ledger")}</h2>
-          <select
-            className="input w-auto"
-            onChange={(event) => setMovementType(event.target.value === "FINISHED" ? "FINISHED" : "RAW")}
-            value={movementType}
-          >
-            <option value="RAW">{L(locale, "المواد الخام", "Raw materials")}</option>
-            <option value="FINISHED">{L(locale, "المنتجات التامة", "Finished goods")}</option>
-          </select>
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">{L(locale, "المخزون", "Inventory")}</h1>
+          <p className="muted mt-1 text-sm">
+            {L(locale, "دفعات المواد الخام وبطاقاتها", "Raw material batches and their cards")}
+          </p>
         </div>
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{L(locale, "التاريخ", "Date")}</th>
-                <th>{L(locale, "المرجع", "Reference")}</th>
-                <th>{L(locale, "الاتجاه", "Direction")}</th>
-                <th>{L(locale, "الكمية", "Quantity")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {movements.rows.slice(0, 50).map((movement) => (
-                <tr key={movement.id}>
-                  <td>{new Date(movement.createdAt).toLocaleString(numericLocale(locale))}</td>
-                  <td>{movement.reference || "—"}</td>
-                  <td>{movement.direction}</td>
-                  <td>{String(movement.quantity)}</td>
-                </tr>
+        <button className="btn btn-secondary" disabled={loading} onClick={() => void load()} type="button">
+          <RefreshCw className="h-4 w-4" /> {L(locale, "تحديث", "Refresh")}
+        </button>
+      </header>
+
+      {error ? (
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <AlertCircle className="h-4 w-4" /> {error}
+        </div>
+      ) : null}
+      {message ? (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700" role="status">
+          {message}
+        </div>
+      ) : null}
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard
+          icon={Boxes}
+          label={L(locale, "إجمالي الكمية", "Total quantity")}
+          value={formatNumber(totalQuantity, locale)}
+        />
+        <SummaryCard
+          icon={Layers}
+          label={L(locale, "عدد الدفعات", "Batches")}
+          value={formatNumber(lots.length, locale, 0)}
+        />
+        <SummaryCard
+          icon={Wheat}
+          label={L(locale, "حبوب / مطحون", "Grains / Ground")}
+          value={`${formatNumber(grainsCount, locale, 0)} / ${formatNumber(groundCount, locale, 0)}`}
+        />
+        <SummaryCard
+          icon={Check}
+          label={L(locale, "تم التنقيه", "Cleaned")}
+          value={formatNumber(cleanedCount, locale, 0)}
+        />
+      </section>
+
+      <section className="card p-4">
+        <h2 className="flex items-center gap-2 text-sm font-bold">
+          <Plus className="h-4 w-4" /> {L(locale, "إضافة إلى المخزون", "Add to stock")}
+        </h2>
+        {!canManage ? (
+          <p className="muted mt-2 text-xs">
+            {L(locale, "ليست لديك صلاحية إضافة مخزون.", "You do not have permission to add stock.")}
+          </p>
+        ) : null}
+        <form className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]" onSubmit={(event) => void submit(event)}>
+          <label className="block text-xs font-medium">
+            {L(locale, "اسم المنتج", "Product name")}
+            <select className="input mt-1" onChange={(e) => setIngredientId(e.target.value)} value={ingredientId}>
+              <option value="">{L(locale, "— اختر المنتج —", "— Select product —")}</option>
+              {(data?.ingredients ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {locale === "ar" ? item.nameAr : item.nameEn} · {item.sku}
+                </option>
               ))}
-              {movements.rows.length === 0 ? (
-                <tr><td className="muted p-6 text-center" colSpan={4}>{L(locale, "لا توجد حركة", "No movements")}</td></tr>
-              ) : null}
-            </tbody>
-          </table>
+            </select>
+          </label>
+          <label className="block text-xs font-medium">
+            {L(locale, "الكمية", "Quantity")}
+            <input
+              className="input mt-1"
+              min="0"
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="0"
+              step="any"
+              type="number"
+              value={quantity}
+            />
+          </label>
+          <label className="block text-xs font-medium">
+            {L(locale, "حالة المنتج", "Product state")}
+            <select
+              className="input mt-1"
+              onChange={(e) => setItemState(e.target.value as "GRAINS" | "GROUND")}
+              value={itemState}
+            >
+              <option value="GRAINS">{L(locale, "حبوب", "Grains")}</option>
+              <option value="GROUND">{L(locale, "مطحون", "Ground")}</option>
+            </select>
+          </label>
+          <div className="text-xs font-medium">
+            {L(locale, "التنقيه", "Cleaning")}
+            <label className="mt-1 flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-sm">
+              <input
+                checked={cleaned}
+                className="h-4 w-4 accent-[var(--primary)]"
+                onChange={(e) => setCleaned(e.target.checked)}
+                type="checkbox"
+              />
+              {L(locale, "تم التنقيه", "Cleaned")}
+            </label>
+          </div>
+          <button
+            className="btn btn-primary h-10 self-end"
+            disabled={!canManage || saving || loading}
+            type="submit"
+          >
+            <Plus className="h-4 w-4" />
+            {saving ? L(locale, "جارٍ الإضافة...", "Adding...") : L(locale, "إضافة للمخزون", "Add to stock")}
+          </button>
+        </form>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-bold">{L(locale, "بطاقات المخزون", "Stock cards")}</h2>
+          <span className="muted text-xs">{formatNumber(lots.length, locale, 0)}</span>
         </div>
+        {loading ? (
+          <p className="muted card p-8 text-center text-sm">{L(locale, "جارٍ التحميل...", "Loading...")}</p>
+        ) : lots.length === 0 ? (
+          <p className="muted card p-8 text-center text-sm">
+            {L(locale, "لا توجد دفعات مخزون بعد.", "No stock batches yet.")}
+          </p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {lots.map((lot) => {
+              const isGround = (lot.itemState ?? "GRAINS") === "GROUND";
+              return (
+                <article className="card flex flex-col gap-3 p-4" key={lot.id}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-muted)]">
+                        <Package className="h-4 w-4 text-[var(--primary)]" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold">{ingredientName(lot.ingredientId)}</div>
+                        <div className="muted truncate text-[11px]">{lot.lotNumber}</div>
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-[11px] font-medium">
+                      {isGround ? L(locale, "مطحون", "Ground") : L(locale, "حبوب", "Grains")}
+                    </span>
+                  </div>
+
+                  <div className="flex items-end justify-between gap-2">
+                    <div>
+                      <div className="muted text-[11px]">{L(locale, "الكمية", "Quantity")}</div>
+                      <div className="mt-0.5 text-xl font-bold tabular-nums">{formatNumber(lot.quantity, locale)}</div>
+                    </div>
+                    <div className="text-end">
+                      <div className="muted text-[11px]">{L(locale, "التكلفة", "Cost")}</div>
+                      <div className="mt-0.5 text-xs tabular-nums">{formatNumber(lot.unitCost, locale)}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-2 text-[11px]">
+                    <span className={lot.cleaned
+                      ? "rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700"
+                      : "rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700"}
+                    >
+                      {lot.cleaned ? L(locale, "تم التنقيه", "Cleaned") : L(locale, "غير منقي", "Not cleaned")}
+                    </span>
+                    <span className="muted truncate">{warehouseName(lot.warehouseId)}</span>
+                    <span className="muted ms-auto">
+                      {new Date(lot.receivedAt).toLocaleDateString(locale === "ar" ? "ar-YE-u-nu-latn" : "en-US")}
+                    </span>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
     </div>
   );
 }
 
-function SummaryCard({ title, value, tone }: { title: string; value: string; tone?: string }) {
+function SummaryCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+}) {
   return (
-    <div className="card p-4">
-      <div className="muted text-xs">{title}</div>
-      <div className={`mt-2 text-xl font-bold tabular-nums ${tone ?? ""}`}>{value}</div>
+    <div className="card flex items-center justify-between gap-3 p-4">
+      <div className="min-w-0">
+        <div className="muted truncate text-xs">{label}</div>
+        <div className="mt-1 text-xl font-bold tabular-nums">{value}</div>
+      </div>
+      <Icon className="h-5 w-5 shrink-0 text-[var(--primary)]" />
     </div>
   );
 }

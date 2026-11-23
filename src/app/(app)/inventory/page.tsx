@@ -5,5 +5,5 @@ export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const auth = await requireWorkflow(["inventory.view"]);
-  return <InventoryPage locale={auth.locale} canManage={canAny(auth, ["inventory.manage", "inventory.adjust"])} />;
+  return <InventoryPage locale={auth.locale} canManage={canAny(auth, ["inventory.manage"])} />;
 }

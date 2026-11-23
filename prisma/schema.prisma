@@ -404,6 +404,8 @@ model IngredientLot {
   quantity     Decimal   @db.Decimal(18, 4)
   initialQty   Decimal   @db.Decimal(18, 4)
   unitCost     Decimal   @db.Decimal(18, 4)
+  itemState    String    @default("GRAINS") // GRAINS | GROUND
+  cleaned      Boolean   @default(false)
   receivedAt   DateTime  @default(now())
   expiryDate   DateTime?
   createdAt    DateTime  @default(now())

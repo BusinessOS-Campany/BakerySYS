@@ -90,6 +90,8 @@ export async function receiveIngredient(tx: Db, input: StockOwner & {
   lotNumber?: string | null;
   expiryDate?: Date | null;
   supplierId?: string | null;
+  itemState?: "GRAINS" | "GROUND";
+  cleaned?: boolean;
   movementType?: string;
   referenceType?: string;
   referenceId?: string;
@@ -109,12 +111,16 @@ export async function receiveIngredient(tx: Db, input: StockOwner & {
       tenantId: input.tenantId, warehouseId: input.warehouseId,
       ingredientId: input.ingredientId, supplierId: input.supplierId ?? null,
       lotNumber, quantity: qty, initialQty: qty, unitCost: round(input.unitCost, 6),
+      itemState: input.itemState ?? "GRAINS",
+      cleaned: input.cleaned ?? false,
       expiryDate: input.expiryDate ?? null,
     },
     update: {
       quantity: { increment: qty },
       initialQty: { increment: qty },
       unitCost: round(input.unitCost, 6),
+      ...(input.itemState !== undefined ? { itemState: input.itemState } : {}),
+      ...(input.cleaned !== undefined ? { cleaned: input.cleaned } : {}),
       expiryDate: input.expiryDate ?? undefined,
     },
   });
@@ -140,7 +146,7 @@ export async function receiveIngredient(tx: Db, input: StockOwner & {
     where: { id: input.ingredientId },
     data: { currentCost: round(input.unitCost, 6) },
   }).catch(() => undefined);
-  return { balance, lotId: lot.id };
+  return { balance, lotId: lot.id, lot };
 }
 
 export async function consumeIngredient(tx: Db, input: StockOwner & {
