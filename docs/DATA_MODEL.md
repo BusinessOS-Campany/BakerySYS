@@ -32,10 +32,6 @@ The authoritative schema is `prisma/schema.prisma`. Referential integrity constr
 
 `JournalEntry` → `JournalLine`, `CustomerReceivable`, `SupplierPayable`. Entries are immutable once posted. `reverseJournal` creates a new compensating entry and marks the original `REVERSED`.
 
-### Quality
-
-`QualityInspection` references a goods receipt or a product.
-
 ## Conventions
 
 - Money and quantities use `NUMERIC(18,4)`; percentages use `NUMERIC(9,4)`.

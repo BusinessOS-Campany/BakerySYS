@@ -540,21 +540,7 @@ async function main() {
     await tx.customerOrder.update({ where: { id: order.id }, data: { journalId: journal.id } });
   });
 
-  // Quality, food-safety and notification samples
-  await db.temperatureLog.createMany({
-    data: [
-      { tenantId: tid, location: "Refrigerator 1", temperature: 3.5, minAllowed: 0, maxAllowed: 5, ok: true, recordedBy: users.get("BAKER")! },
-      { tenantId: tid, location: "Freezer 1", temperature: -18, minAllowed: -25, maxAllowed: -18, ok: true, recordedBy: users.get("STOREKEEPER")! },
-      { tenantId: tid, location: "Oven 1", equipment: "Deck oven", temperature: 185, minAllowed: 175, maxAllowed: 195, ok: true, recordedBy: users.get("BAKER")! },
-    ],
-  });
-  await db.qualityInspection.create({
-    data: {
-      tenantId: tid, referenceType: "RECEIPT", checkType: "INGREDIENT_RECEIVING",
-      standard: "Flour moisture ≤ 14%", actualResult: "13.2%", result: "PASS",
-      employeeId: employeeIds.get("store"),
-    },
-  });
+  // Notification sample
   await db.notification.create({
     data: {
       tenantId: tid, titleAr: "طلب مخصص جديد", titleEn: "New custom order",

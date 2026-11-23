@@ -25,32 +25,6 @@ type ResourceConfig = {
  *  documents (sales, journals, receipts with stock impact) are intentionally
  *  absent — they need dedicated, atomic workflows. */
 const CONFIG: Record<string, ResourceConfig> = {
-  "quality-inspections": {
-    model: "qualityInspection",
-    permission: "quality.manage",
-    fields: {
-      checkType: "string", standard: "nullableString", actualResult: "nullableString",
-      expectedValue: "nullableString", result: "string", temperature: "number",
-      notes: "nullableString", correctiveAction: "nullableString",
-    },
-    allowed: { result: ["PASS", "FAIL", "PENDING"] },
-  },
-  "temperature-logs": {
-    model: "temperatureLog",
-    permission: "quality.manage",
-    fields: {
-      location: "string", equipment: "nullableString", temperature: "number",
-      minAllowed: "nullableNumber", maxAllowed: "nullableNumber", notes: "nullableString",
-    },
-    derive: (row, data) => {
-      const temperature = Number(data.temperature ?? row.temperature);
-      const min = data.minAllowed === undefined ? row.minAllowed : data.minAllowed;
-      const max = data.maxAllowed === undefined ? row.maxAllowed : data.maxAllowed;
-      const belowMin = min != null && temperature < Number(min);
-      const aboveMax = max != null && temperature > Number(max);
-      return { ok: !belowMin && !aboveMax };
-    },
-  },
   "inventory-counts": {
     model: "stockCount",
     permission: "inventory.manage",

@@ -41,7 +41,7 @@ $fks = @(
 'purchase_orders|supplierId|suppliers','purchase_orders|branchId|branches','purchase_orders|warehouseId|warehouses',
 'purchase_order_items|orderId|purchase_orders','purchase_order_items|ingredientId|ingredients','purchase_order_items|unitId|units_of_measure',
 'goods_receipts|orderId|purchase_orders','goods_receipts|supplierId|suppliers','goods_receipts|warehouseId|warehouses',
-'goods_receipt_items|receiptId|goods_receipts','goods_receipt_items|orderItemId|purchase_order_items','goods_receipt_items|ingredientId|ingredients','goods_receipt_items|unitId|units_of_measure','goods_receipt_items|qualityCheckId|quality_inspections',
+'goods_receipt_items|receiptId|goods_receipts','goods_receipt_items|orderItemId|purchase_order_items','goods_receipt_items|ingredientId|ingredients','goods_receipt_items|unitId|units_of_measure',
 'supplier_invoices|supplierId|suppliers','supplier_invoices|receiptId|goods_receipts','supplier_payments|supplierId|suppliers','supplier_payments|invoiceId|supplier_invoices',
 'purchase_returns|supplierId|suppliers','purchase_returns|receiptId|goods_receipts','purchase_return_items|returnId|purchase_returns','purchase_return_items|ingredientId|ingredients',
 'customer_addresses|customerId|customers','sales|customerId|customers','sales|branchId|branches','sales|warehouseId|warehouses','sales|cashierId|users','sales|cashSessionId|cash_sessions','sales|journalId|journal_entries',
@@ -58,7 +58,6 @@ $fks = @(
 'employee_attendance|employeeId|employees','employee_shifts|employeeId|employees','employee_shifts|branchId|branches','employee_leaves|employeeId|employees','salary_advances|employeeId|employees',
 'payroll_runs|journalId|journal_entries','payroll_items|runId|payroll_runs','payroll_items|employeeId|employees',
 'ingredient_allergens|ingredientId|ingredients','ingredient_allergens|allergenId|allergens','product_allergens|productId|products','product_allergens|allergenId|allergens',
-'quality_inspections|employeeId|employees','corrective_actions|inspectionId|quality_inspections','recall_records|ingredientLotId|ingredient_lots',
 'notifications|userId|users','notification_preferences|userId|users'
 )
 foreach ($fk in $fks) {

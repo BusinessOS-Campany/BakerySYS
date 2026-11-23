@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3, Boxes, ClipboardList, Croissant, Landmark,
   LayoutDashboard, PanelLeftClose, PanelLeftOpen, ReceiptText, Settings,
-  ShieldCheck, ShoppingCart, Tags, Truck, UserCog, UsersRound, Wallet,
+  ShoppingCart, Tags, Truck, UserCog, UsersRound, Wallet,
   Warehouse, X, type LucideIcon,
 } from "lucide-react";
 import { NAV_SECTIONS } from "./nav";
@@ -14,7 +14,7 @@ import { translate, type Locale } from "@/lib/i18n/dictionary";
 
 const ICONS: Record<string, LucideIcon> = {
   BarChart3, Boxes, ClipboardList, Croissant, Landmark,
-  LayoutDashboard, ReceiptText, Settings, ShieldCheck, ShoppingCart, Tags,
+  LayoutDashboard, ReceiptText, Settings, ShoppingCart, Tags,
   Truck, UserCog, UsersRound, Wallet, Warehouse,
 };
 

@@ -41,12 +41,6 @@ enum AccountType {
   EXPENSE
 }
 
-enum QualityResult {
-  PASS
-  FAIL
-  PENDING
-}
-
 // ─────────────────── Organization & access ───────────────────
 model Tenant {
   id                    String   @id @default(cuid())
@@ -769,7 +763,6 @@ model GoodsReceiptItem {
   unitCost         Decimal   @db.Decimal(18, 4)
   lotNumber        String?
   expiryDate       DateTime?
-  qualityCheckId   String?
   @@index([receiptId])
   @@map("goods_receipt_items")
 }
@@ -1395,7 +1388,7 @@ model PayrollItem {
   @@map("payroll_items")
 }
 
-// ─────────────────── Quality & food safety ───────────────────
+// ─────────────────── Food safety ───────────────────
 model Allergen {
   id        String   @id @default(cuid())
   tenantId  String
@@ -1424,42 +1417,6 @@ model ProductAllergen {
   @@map("product_allergens")
 }
 
-model QualityInspection {
-  id           String        @id @default(cuid())
-  tenantId     String
-  referenceType String       // RECEIPT | BATCH | PRODUCT
-  referenceId  String?
-  checkType    String
-  standard     String?
-  actualResult String?
-  expectedValue String?
-  result       QualityResult @default(PENDING)
-  temperature  Decimal?      @db.Decimal(9, 2)
-  employeeId   String?
-  checkedAt    DateTime      @default(now())
-  notes        String?
-  correctiveAction String?
-  createdAt    DateTime      @default(now())
-  @@index([tenantId, referenceType, referenceId])
-  @@map("quality_inspections")
-}
-
-model TemperatureLog {
-  id          String   @id @default(cuid())
-  tenantId    String
-  location    String
-  equipment   String?
-  temperature Decimal  @db.Decimal(9, 2)
-  minAllowed  Decimal? @db.Decimal(9, 2)
-  maxAllowed  Decimal? @db.Decimal(9, 2)
-  ok          Boolean  @default(true)
-  recordedBy  String
-  recordedAt  DateTime @default(now())
-  notes       String?
-  @@index([tenantId, recordedAt])
-  @@map("temperature_logs")
-}
-
 model CleaningRecord {
   id          String   @id @default(cuid())
   tenantId    String
@@ -1480,33 +1437,6 @@ model HygieneChecklist {
   items     Json
   active    Boolean  @default(true)
   @@map("hygiene_checklists")
-}
-
-model CorrectiveAction {
-  id          String   @id @default(cuid())
-  tenantId    String
-  inspectionId String?
-  description String
-  assignedTo  String?
-  dueDate     DateTime?
-  status      String   @default("OPEN")
-  closedAt    DateTime?
-  createdAt   DateTime @default(now())
-  @@map("corrective_actions")
-}
-
-model RecallRecord {
-  id           String   @id @default(cuid())
-  tenantId     String
-  reference    String
-  ingredientLotId String?
-  batchId      String?
-  reason       String
-  affectedQty  Decimal? @db.Decimal(18, 4)
-  status       String   @default("OPEN")
-  createdBy    String
-  createdAt    DateTime @default(now())
-  @@map("recall_records")
 }
 
 // ─────────────────── System ───────────────────

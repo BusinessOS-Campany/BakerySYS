@@ -31,7 +31,6 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/categories", labelKey: "nav.categories", icon: "Tags", permission: "products.view" },
       { href: "/inventory", labelKey: "nav.inventory", icon: "Boxes", permission: "inventory.view" },
       { href: "/warehouses", labelKey: "nav.warehouses", icon: "Warehouse", permission: "warehouses.view" },
-      { href: "/quality", labelKey: "nav.quality", icon: "ShieldCheck", permission: "quality.view" },
     ],
   },
   {

@@ -1,6 +1,6 @@
 # BakerySYS
 
-Production-oriented bakery management system built with Next.js 16, React 19, TypeScript, PostgreSQL and Prisma 7. It covers the operating cycle from purchasing and inventory through recipes, quality control, POS sales, supplier/customer balances, accounting and analytics.
+Production-oriented bakery management system built with Next.js 16, React 19, TypeScript, PostgreSQL and Prisma 7. It covers the operating cycle from purchasing and inventory through recipes, POS sales, supplier/customer balances, accounting and analytics.
 
 The interface is bilingual (Arabic RTL / English LTR), permission-aware, and contains no hardcoded dashboard data — every number comes from PostgreSQL.
 
@@ -41,7 +41,7 @@ npm run db:migrate
 npm run db:seed
 ```
 
-`db:seed` is idempotent and intended for development only. It creates the demo tenant, branches, chart of accounts, roles, users, ingredients, products, recipes, stock lots, a quality inspection and an open cash session.
+`db:seed` is idempotent and intended for development only. It creates the demo tenant, branches, chart of accounts, roles, users, ingredients, products, recipes, stock lots and an open cash session.
 
 > Never run `db:reset:dev` against production data. Use `prisma migrate deploy` in production.
 
@@ -80,7 +80,6 @@ Demo tenant: `golden-crust`. The seeded cash session is intentionally left `OPEN
 | Products/master data | `/products`, `/ingredients`, `/categories`, `/units`, `/customers`, `/suppliers`, `/warehouses`, `/branches`, `/accounts`, `/employees`, `/expense-categories` | Generic, permission-gated CRUD |
 | Recipes | `/recipes` | Ingredient lines, costing snapshots, recalculation, new versions |
 | Inventory | `/inventory` | Stock balances, FEFO lots, adjustments, counts, transfers, ledger |
-| Quality | `/quality` | Batch/receipt/product inspections and temperature log |
 | Purchasing | `/purchases` | Purchase orders, approvals, goods receipts, supplier payments |
 | Accounting | `/accounting` | Manual journals, chart of accounts, compensating reversals |
 | Expenses | `/expenses` | Expense posting and voiding |
