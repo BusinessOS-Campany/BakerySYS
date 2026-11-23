@@ -180,24 +180,6 @@ export function journalBalanced(lines: JournalLineInput[]): boolean {
   return Math.abs(debit - credit) < 0.000001;
 }
 
-export function productionYield(input: {
-  planned: number;
-  actual: number;
-  rejected?: number;
-  waste?: number;
-}) {
-  const planned = safeNumber(input.planned) || 1;
-  const actual = safeNumber(input.actual);
-  const rejected = safeNumber(input.rejected);
-  const waste = safeNumber(input.waste);
-  return {
-    yieldPercent: round((actual / planned) * 100, 2),
-    rejectPercent: round((rejected / planned) * 100, 2),
-    wastePercent: round((waste / planned) * 100, 2),
-    goodQuantity: round(actual - rejected - waste, 6),
-  };
-}
-
 export function paymentBalance(total: number, payments: number[]): number {
   return round(total - payments.reduce((s, p) => s + safeNumber(p), 0), 6);
 }

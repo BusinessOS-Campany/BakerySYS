@@ -4,7 +4,6 @@ export const PERMISSIONS = [
   "products.view", "products.manage",
   "ingredients.view", "ingredients.manage",
   "recipes.view", "recipes.manage",
-  "production.view", "production.manage", "production.complete",
   "inventory.view", "inventory.manage", "inventory.adjust", "warehouses.view", "warehouses.manage",
   "purchases.view", "purchases.manage", "purchases.approve",
   "sales.view", "sales.create", "sales.refund",
@@ -30,13 +29,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     "expenses.view", "expenses.manage", "reports.view", "reports.export", "sales.view",
     "purchases.view", "customers.view", "notifications.view",
   ],
-  PRODUCTION_MANAGER: [
-    "dashboard.view", "products.view", "ingredients.view", "recipes.view", "recipes.manage",
-    "production.view", "production.manage", "production.complete", "inventory.view",
-    "quality.view", "quality.manage", "reports.view", "notifications.view",
-  ],
   BAKER: [
-    "dashboard.view", "products.view", "recipes.view", "production.view", "production.complete",
+    "dashboard.view", "products.view", "recipes.view",
     "inventory.view", "quality.view", "quality.manage", "notifications.view",
   ],
   CASHIER: [
@@ -53,7 +47,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     "customers.manage", "orders.view", "orders.manage", "notifications.view",
   ],
   SUPERVISOR: [
-    "dashboard.view", "products.view", "ingredients.view", "production.view", "production.manage",
+    "dashboard.view", "products.view", "ingredients.view",
     "inventory.view", "inventory.manage", "sales.view", "orders.view", "orders.manage",
     "quality.view", "hr.view", "reports.view", "notifications.view",
   ],

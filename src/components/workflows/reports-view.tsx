@@ -11,7 +11,6 @@ type ReportData = {
     revenue: number; cogs: number; grossProfit: number; tax: number; expenses: number;
     netProfit: number; rawStockValue: number; finishedStockValue: number; receivables: number; payables: number;
   };
-  production: { batches: number; completed: number; completedQuantity: number; rejectedQuantity: number };
   salesByProduct: { productId: string; name: string; nameAr: string; sku: string; revenue: number; cogs: number; profit: number; quantity: number }[];
   trialBalance: { code: string; name: string; debit: number; credit: number }[];
   journalEntries: { id: string; entryNumber: string; date: string; description: string }[];

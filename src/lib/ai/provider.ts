@@ -29,12 +29,6 @@ export type AIInsightInput = {
     receivables: number;
     payables: number;
   };
-  production: {
-    batches: number;
-    completed: number;
-    completedQuantity: number;
-    rejectedQuantity: number;
-  };
   topProducts: { name: string; revenue: number; profit: number }[];
   lowStock: { name: string; current: number; minimum: number }[];
 };
@@ -44,7 +38,7 @@ export class LocalInsightsProvider implements AIProvider {
 
   async insights(input: AIInsightInput): Promise<AIInsight[]> {
     const result: AIInsight[] = [];
-    const { summary, production, topProducts, lowStock } = input;
+    const { summary, topProducts, lowStock } = input;
 
     if (summary.revenue > 0) {
       const margin = (summary.grossProfit / summary.revenue) * 100;
@@ -60,7 +54,7 @@ export class LocalInsightsProvider implements AIProvider {
       result.push({
         kind: "RISK",
         title: "Operating expenses exceed gross profit",
-        body: "Expenses recorded in this period are higher than gross profit. Review the expense report before expanding production.",
+        body: "Expenses recorded in this period are higher than gross profit. Review the expense report before expanding the business.",
         metric: summary.expenses - summary.grossProfit,
         link: "/expenses",
       });
@@ -73,20 +67,6 @@ export class LocalInsightsProvider implements AIProvider {
         metric: lowStock.length,
         link: "/inventory",
       });
-    }
-    if (production.batches > 0) {
-      const rejectRate = production.completedQuantity + production.rejectedQuantity > 0
-        ? (production.rejectedQuantity / (production.completedQuantity + production.rejectedQuantity)) * 100
-        : 0;
-      if (rejectRate > 3) {
-        result.push({
-          kind: "RISK",
-          title: "Production rejection rate is elevated",
-          body: `Rejected output is ${rejectRate.toFixed(1)}% of completed output. Inspect the quality logs and recipe consistency.`,
-          metric: Math.round(rejectRate * 10) / 10,
-          link: "/quality",
-        });
-      }
     }
     if (summary.receivables > 0) {
       result.push({

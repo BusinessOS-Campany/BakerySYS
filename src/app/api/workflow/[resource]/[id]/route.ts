@@ -67,28 +67,6 @@ const CONFIG: Record<string, ResourceConfig> = {
     blockedMessage: "Only draft transfers can be changed",
     blockedMessageAr: "يمكن تعديل التحويل في حالة المسودة فقط",
   },
-  "production-plans": {
-    model: "productionPlan",
-    permission: "production.manage",
-    fields: {
-      tableQuantity: "number", pieceQuantity: "number", kilogramQuantity: "number",
-      notes: "nullableString",
-    },
-    derive: (row, data) => data.pieceQuantity === undefined
-      ? {}
-      : { plannedQuantity: Number(data.pieceQuantity) },
-    blocked: (row) => row.status !== "PLANNED",
-    blockedMessage: "Only planned production plans can be changed",
-    blockedMessageAr: "يمكن تعديل الخطة في حالة التخطيط فقط",
-  },
-  "production-batches": {
-    model: "productionBatch",
-    permission: "production.manage",
-    fields: { plannedQuantity: "number", expiryDate: "nullableDate", notes: "nullableString" },
-    blocked: (row) => row.status !== "PLANNED",
-    blockedMessage: "Only planned batches can be changed",
-    blockedMessageAr: "يمكن تغيير الدفعة في حالة التخطيط فقط",
-  },
   "purchasing-orders": {
     model: "purchaseOrder",
     permission: "purchases.manage",

@@ -6,7 +6,6 @@ import {
   journalBalanced,
   journalTotals,
   paymentBalance,
-  productionYield,
   safeNumber,
   selectFefoLots,
 } from "@/lib/calculations";
@@ -74,10 +73,7 @@ describe("calculations", () => {
     expect(journalBalanced([{ accountId: "a", debit: 10, credit: 0 }, { accountId: "b", debit: 0, credit: 9 }])).toBe(false);
   });
 
-  it("derives production yield and payment balance", () => {
-    expect(productionYield({ planned: 100, actual: 90, rejected: 5, waste: 5 })).toEqual({
-      yieldPercent: 90, rejectPercent: 5, wastePercent: 5, goodQuantity: 80,
-    });
+  it("calculates payment balance", () => {
     expect(paymentBalance(100, [30, 20])).toBe(50);
   });
 });

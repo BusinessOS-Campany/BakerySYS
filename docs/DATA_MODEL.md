@@ -20,9 +20,9 @@ The authoritative schema is `prisma/schema.prisma`. Referential integrity constr
 
 `IngredientStock`, `FinishedStock`, `IngredientLot`, `FinishedLot`, `StockAdjustment`, `StockCount`, `StockCountLine`, `WarehouseTransfer`, `IngredientMovement`, `FinishedMovement`. Aggregate stock rows and lot rows are both maintained so valuation and FEFO consumption remain consistent.
 
-### Recipes and production
+### Recipes
 
-`Recipe` → `RecipeVersion` → `RecipeLine`, `RecipeInstruction`, `RecipeCostSnapshot`. `ProductionPlan` and `ProductionBatch` track planned and actual output, rejection and waste. Completion requires a passing `QualityInspection` and consumes ingredients FEFO before adding finished lots.
+`Recipe` → `RecipeVersion` → `RecipeLine`, `RecipeInstruction`, `RecipeCostSnapshot`. Recipe costs are recalculated from ingredient prices and unit conversions.
 
 ### Sales
 
@@ -34,7 +34,7 @@ The authoritative schema is `prisma/schema.prisma`. Referential integrity constr
 
 ### Quality
 
-`QualityInspection` references a receipt, batch or product. A passing batch inspection sets `ProductionBatch.qualityApproved`, enabling completion.
+`QualityInspection` references a goods receipt or a product.
 
 ## Conventions
 

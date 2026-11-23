@@ -1,7 +1,7 @@
 /**
  * Development seed. Idempotent: if the demo tenant exists it does nothing.
  * Creates a complete, interconnected bakery dataset and exercises the real
- * services (purchase receipt → production → sale → accounting).
+ * services (purchase receipt → sale → accounting).
  * Run: npm run db:seed
  */
 import { db } from "../src/lib/db";
@@ -12,7 +12,6 @@ import { DEFAULT_ROLE_PERMISSIONS, PERMISSIONS } from "../src/lib/permissions/ca
 import type { AuthContext } from "../src/lib/auth/session";
 import { receiveIngredient, addFinishedStock } from "../src/lib/inventory/stock";
 import { postJournal, ACCOUNT_CODES } from "../src/lib/accounting/ledger";
-import { createProductionPlan, createBatch, completeBatch } from "../src/lib/production/service";
 import { createPurchaseOrder, approvePurchaseOrder, receiveGoods } from "../src/lib/purchasing/service";
 import { createSale } from "../src/lib/sales/service";
 import { nextNumber } from "../src/lib/sequence";
@@ -61,7 +60,6 @@ async function main() {
     ["OWNER", "Owner", "المالك"],
     ["GENERAL_MANAGER", "General Manager", "المدير العام"],
     ["ACCOUNTANT", "Accountant", "المحاسب"],
-    ["PRODUCTION_MANAGER", "Production Manager", "مدير الإنتاج"],
     ["BAKER", "Baker", "الخباز"],
     ["CASHIER", "Cashier", "أمين الصندوق"],
     ["STOREKEEPER", "Storekeeper", "أمين المخزن"],
@@ -84,7 +82,6 @@ async function main() {
     ["OWNER", "owner@goldencrust.demo", "مالك المخبز", "Bakery Owner"],
     ["GENERAL_MANAGER", "manager@goldencrust.demo", "المدير العام", "General Manager"],
     ["ACCOUNTANT", "accountant@goldencrust.demo", "المحاسب", "Accountant"],
-    ["PRODUCTION_MANAGER", "production@goldencrust.demo", "مدير الإنتاج", "Production Manager"],
     ["BAKER", "baker@goldencrust.demo", "الخباز", "Baker"],
     ["CASHIER", "cashier@goldencrust.demo", "أمين الصندوق", "Cashier"],
     ["STOREKEEPER", "storekeeper@goldencrust.demo", "أمين المخزن", "Storekeeper"],
@@ -339,15 +336,6 @@ async function main() {
       },
     });
   }
-  for (const stage of [
-    ["MIXING", "Mixing", "الخلط", 1], ["FERMENTATION", "Fermentation", "التخمر", 2],
-    ["BAKING", "Baking", "الخبز", 3], ["COOLING", "Cooling", "التبريد", 4], ["FINISHING", "Finishing", "التشطيب", 5],
-  ] as const) {
-    await db.productionStage.create({
-      data: { tenantId: tid, code: stage[0], nameEn: stage[1], nameAr: stage[2], sortOrder: stage[3] },
-    });
-  }
-
   // Opening stock, purchase order and receipt — all through real inventory services
   await db.$transaction(async (tx) => {
     for (const [code, , , , , , , stock] of ingredientData) {
@@ -408,41 +396,6 @@ async function main() {
     });
   });
 
-  // Approved production: plan → batch → quality approval → completion
-  let breadBatchId = "";
-  await db.$transaction(async (tx) => {
-    const plan = await createProductionPlan(tx, {
-      tenantId: tid, branchId: branchMain.id, productId: products.get("BREAD")!,
-      pieceQuantity: 40, tableQuantity: 0, kilogramQuantity: 0,
-      plannedDate: new Date(), createdById: users.get("PRODUCTION_MANAGER")!,
-    });
-    await tx.productionPlan.update({ where: { id: plan.id }, data: { status: "APPROVED" } });
-    const batch = await createBatch(tx, {
-      tenantId: tid, planId: plan.id, branchId: branchMain.id, warehouseId: whFinished.id,
-      sourceWarehouseId: whRaw.id,
-      productId: products.get("BREAD")!, plannedQuantity: 40,
-      createdById: users.get("PRODUCTION_MANAGER")!,
-      employeeIds: [...employeeIds.values()],
-    });
-    await tx.productionBatch.update({
-      where: { id: batch.id },
-      data: { status: "QUALITY_CONTROL", stage: "QUALITY_CONTROL", startedAt: new Date(Date.now() - 3_600_000) },
-    });
-    await tx.qualityInspection.create({
-      data: {
-        tenantId: tid, referenceType: "BATCH", referenceId: batch.id,
-        checkType: "FINAL_PRODUCT", standard: "Weight 250g ±10g, internal temp ≥ 90°C",
-        actualResult: "Weight 255g, temp 94°C", result: "PASS",
-        employeeId: employeeIds.get("baker"), checkedAt: new Date(),
-      },
-    });
-    await completeBatch(tx, {
-      tenantId: tid, batchId: batch.id, actualQuantity: 40, rejectedQuantity: 1, wasteQuantity: 1,
-      completedById: users.get("PRODUCTION_MANAGER")!,
-    });
-    breadBatchId = batch.id;
-  });
-
   // Additional approved finished stock for POS demo
   await db.$transaction(async (tx) => {
     for (const [code, qty] of [["CAKE", 30], ["CROISSANT", 60], ["COOKIE", 80]] as const) {
@@ -450,7 +403,7 @@ async function main() {
         tenantId: tid, warehouseId: whFinished.id, productId: products.get(code)!,
         quantity: qty, unitCost: Number((await tx.product.findUnique({ where: { id: products.get(code)! } }))?.costPrice ?? 0),
         lotNumber: `FG-${code}-OPEN`, expiryDate: new Date(Date.now() + 3 * 86_400_000),
-        qualityApproved: true, createdById: users.get("PRODUCTION_MANAGER")!,
+        qualityApproved: true, createdById: users.get("OWNER")!,
       });
     }
   });
@@ -602,19 +555,12 @@ async function main() {
       employeeId: employeeIds.get("store"),
     },
   });
-  await db.notification.createMany({
-    data: [
-      {
-        tenantId: tid, titleAr: "اكتملت دفعة الإنتاج", titleEn: "Production batch completed",
-        bodyAr: "تم إنهاء دفعة الخبز بنجاح", bodyEn: "Bread batch completed successfully",
-        kind: "PRODUCTION", link: `/production/${breadBatchId}`,
-      },
-      {
-        tenantId: tid, titleAr: "طلب مخصص جديد", titleEn: "New custom order",
-        bodyAr: "طلب كيك بانتظار التنفيذ", bodyEn: "A cake order is awaiting production",
-        kind: "ORDER",
-      },
-    ],
+  await db.notification.create({
+    data: {
+      tenantId: tid, titleAr: "طلب مخصص جديد", titleEn: "New custom order",
+      bodyAr: "طلب كيك بانتظار التنفيذ", bodyEn: "A custom cake order is awaiting fulfillment",
+      kind: "ORDER",
+    },
   });
 
   console.log(`[seed] Demo tenant created: ${tenant.nameEn} (${tid})`);

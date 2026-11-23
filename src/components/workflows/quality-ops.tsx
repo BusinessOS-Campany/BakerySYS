@@ -46,19 +46,18 @@ export function QualityPage({ locale, canManage }: { locale: Locale; canManage: 
     return [];
   }, locale, refresh);
   const lookups = useLookups(["products", "warehouses"], locale);
-  const batchLookups = useList<{ id: string; batchNumber: string }>("/api/production/batches", undefined, locale, refresh);
-  const [referenceType, setReferenceType] = useState("BATCH");
+  const [referenceType, setReferenceType] = useState("RECEIPT");
 
-  const referenceOptions = referenceType === "BATCH"
-    ? batchLookups.rows.map((batch) => ({ value: batch.id, label: batch.batchNumber }))
-    : lookupOptions(referenceType === "PRODUCT" ? lookups.products ?? [] : lookups.warehouses ?? [], locale);
+  const referenceOptions = lookupOptions(
+    referenceType === "PRODUCT" ? lookups.products ?? [] : lookups.warehouses ?? [], locale,
+  );
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">{L(locale, "مراقبة الجودة", "Quality control")}</h1>
         <p className="muted mt-1 text-sm">
-          {L(locale, "فحوص الاستلام والإنتاج ودرجات الحرارة", "Receiving and production inspections, temperature logs")}
+          {L(locale, "فحوص الاستلام والمنتجات ودرجات الحرارة", "Receiving and product inspections, temperature logs")}
         </p>
       </div>
 
@@ -118,7 +117,6 @@ export function QualityPage({ locale, canManage }: { locale: Locale; canManage: 
             <div className="grid gap-3 sm:grid-cols-2">
               <FieldInput
                 field={{ name: "referenceType", label: L(locale, "نوع المرجع", "Reference type"), type: "select", required: true, options: [
-                  { value: "BATCH", label: L(locale, "دفعة إنتاج", "Production batch") },
                   { value: "RECEIPT", label: L(locale, "إيصال استلام", "Goods receipt") },
                   { value: "PRODUCT", label: L(locale, "منتج", "Product") },
                 ] }}
@@ -133,7 +131,7 @@ export function QualityPage({ locale, canManage }: { locale: Locale; canManage: 
             </div>
           ),
           build: (values) => ({
-            referenceType: String(values.referenceType || "BATCH"),
+            referenceType: String(values.referenceType || "RECEIPT"),
             referenceId: String(values.referenceId || "") || null,
             checkType: String(values.checkType),
             standard: String(values.standard || "") || undefined,
@@ -144,7 +142,7 @@ export function QualityPage({ locale, canManage }: { locale: Locale; canManage: 
             notes: String(values.notes || "") || undefined,
             correctiveAction: String(values.correctiveAction || "") || undefined,
           }),
-          afterSave: async () => setReferenceType("BATCH"),
+          afterSave: async () => setReferenceType("RECEIPT"),
         }}
         rowActions={[
           {

@@ -7,7 +7,6 @@ const baseInput: AIInsightInput = {
     revenue: 1000, cogs: 600, grossProfit: 400, expenses: 100, netProfit: 300,
     rawStockValue: 500, finishedStockValue: 200, receivables: 0, payables: 0,
   },
-  production: { batches: 10, completed: 9, completedQuantity: 900, rejectedQuantity: 10 },
   topProducts: [{ name: "Croissant", revenue: 500, profit: 200 }],
   lowStock: [],
 };
@@ -26,7 +25,6 @@ describe("AI provider", () => {
     const insights = await new LocalInsightsProvider().insights({
       ...baseInput,
       summary: { ...baseInput.summary, grossProfit: 100, receivables: 250 },
-      production: { batches: 10, completed: 9, completedQuantity: 80, rejectedQuantity: 20 },
       lowStock: [{ name: "Flour", current: 2, minimum: 10 }],
       topProducts: [{ name: "Cake", revenue: 500, profit: -10 }],
     });

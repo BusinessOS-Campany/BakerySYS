@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3, Boxes, ClipboardList, Croissant, Factory, Landmark,
+  BarChart3, Boxes, ClipboardList, Croissant, Landmark,
   LayoutDashboard, PanelLeftClose, PanelLeftOpen, ReceiptText, Settings,
   ShieldCheck, ShoppingCart, Tags, Truck, UserCog, UsersRound, Wallet,
   Warehouse, X, type LucideIcon,
@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { translate, type Locale } from "@/lib/i18n/dictionary";
 
 const ICONS: Record<string, LucideIcon> = {
-  BarChart3, Boxes, ClipboardList, Croissant, Factory, Landmark,
+  BarChart3, Boxes, ClipboardList, Croissant, Landmark,
   LayoutDashboard, ReceiptText, Settings, ShieldCheck, ShoppingCart, Tags,
   Truck, UserCog, UsersRound, Wallet, Warehouse,
 };

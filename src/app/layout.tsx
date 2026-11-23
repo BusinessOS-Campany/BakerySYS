@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "Bakery ERP", template: "%s · Bakery ERP" },
-  description: "Bakery ERP & POS — purchasing, production, inventory, sales and accounting",
+  description: "Bakery ERP & POS — purchasing, inventory, sales and accounting",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

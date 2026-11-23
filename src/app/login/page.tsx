@@ -32,8 +32,8 @@ export default async function LoginPage({
             </h2>
             <p className="mt-3 max-w-sm text-sm text-white/80">
               {locale === "ar"
-                ? "المشتريات، المخزون، الوصفات، الإنتاج، نقطة البيع والمحاسبة في نظام واحد متكامل."
-                : "Purchasing, inventory, recipes, production, POS and accounting — connected end to end."}
+                ? "المشتريات، المخزون، الوصفات، نقطة البيع والمحاسبة في نظام واحد متكامل."
+                : "Purchasing, inventory, recipes, POS and accounting — connected end to end."}
             </p>
           </div>
           <p className="text-xs text-white/60">© 2026 Bakery ERP</p>

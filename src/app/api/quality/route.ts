@@ -2,7 +2,6 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { apiRoute } from "@/lib/http";
 import { assertBranchAccess } from "@/lib/auth/session";
-import { AppError } from "@/lib/errors";
 import { serialize } from "@/lib/serialize";
 
 export const GET = apiRoute({
@@ -23,7 +22,7 @@ export const GET = apiRoute({
 });
 
 const schema = z.object({
-  referenceType: z.enum(["RECEIPT", "BATCH", "PRODUCT"]),
+  referenceType: z.enum(["RECEIPT", "PRODUCT"]),
   referenceId: z.string().optional().nullable(),
   checkType: z.string().min(2),
   standard: z.string().optional(),
@@ -40,16 +39,7 @@ export const POST = apiRoute({
   permission: "quality.manage",
   schema,
   handler: async (input, auth) => {
-    let branchId: string | null = null;
-    if (input.referenceType === "BATCH" && input.referenceId) {
-      const batch = await db.productionBatch.findFirst({
-        where: { id: input.referenceId, tenantId: auth.user.tenantId },
-        select: { branchId: true },
-      });
-      if (!batch) throw new AppError("NOT_FOUND", "Batch not found", "دفعة الإنتاج غير موجودة");
-      branchId = batch.branchId;
-    }
-    assertBranchAccess(auth, branchId);
+    assertBranchAccess(auth, null);
     const inspection = await db.qualityInspection.create({
       data: {
         tenantId: auth.user.tenantId,
@@ -66,12 +56,6 @@ export const POST = apiRoute({
         correctiveAction: input.correctiveAction ?? null,
       },
     });
-    if (input.referenceType === "BATCH" && input.referenceId && input.result === "PASS") {
-      await db.productionBatch.update({
-        where: { id: input.referenceId },
-        data: { qualityApproved: true },
-      });
-    }
     return serialize(inspection);
   },
 });

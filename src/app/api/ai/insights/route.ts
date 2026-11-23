@@ -16,7 +16,6 @@ export const GET = apiRoute({
     const insights = await getAIProvider().insights({
       currency: auth.tenant.currencyCode,
       summary: report.summary,
-      production: report.production,
       topProducts: report.salesByProduct.slice(0, 10).map((p) => ({
         name: auth.locale === "ar" ? p.nameAr : p.name,
         revenue: p.revenue,

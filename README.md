@@ -1,6 +1,6 @@
 # BakerySYS
 
-Production-oriented bakery management system built with Next.js 16, React 19, TypeScript, PostgreSQL and Prisma 7. It covers the full operating cycle from purchasing and inventory through recipes, production, quality control, POS sales, supplier/customer balances, accounting and analytics.
+Production-oriented bakery management system built with Next.js 16, React 19, TypeScript, PostgreSQL and Prisma 7. It covers the operating cycle from purchasing and inventory through recipes, quality control, POS sales, supplier/customer balances, accounting and analytics.
 
 The interface is bilingual (Arabic RTL / English LTR), permission-aware, and contains no hardcoded dashboard data — every number comes from PostgreSQL.
 
@@ -41,7 +41,7 @@ npm run db:migrate
 npm run db:seed
 ```
 
-`db:seed` is idempotent and intended for development only. It creates the demo tenant, branches, chart of accounts, roles, users, ingredients, products, recipes, stock lots, a production batch, a quality inspection and an open cash session.
+`db:seed` is idempotent and intended for development only. It creates the demo tenant, branches, chart of accounts, roles, users, ingredients, products, recipes, stock lots, a quality inspection and an open cash session.
 
 > Never run `db:reset:dev` against production data. Use `prisma migrate deploy` in production.
 
@@ -65,7 +65,6 @@ Password for the other demo users: `Bakery@2026`
 | `owner@goldencrust.demo` | OWNER | Full access to every module |
 | `manager@goldencrust.demo` | GENERAL_MANAGER | Operations and reporting |
 | `accountant@goldencrust.demo` | ACCOUNTANT | Accounting, expenses, reports |
-| `production@goldencrust.demo` | PRODUCTION_MANAGER | Recipes, production, quality |
 | `storekeeper@goldencrust.demo` | STOREKEEPER | Inventory and purchasing |
 | `cashier@goldencrust.demo` | CASHIER | POS and sales |
 
@@ -80,7 +79,6 @@ Demo tenant: `golden-crust`. The seeded cash session is intentionally left `OPEN
 | Sales | `/sales` | Invoice register, invoice detail, sales returns with reversing journals |
 | Products/master data | `/products`, `/ingredients`, `/categories`, `/units`, `/customers`, `/suppliers`, `/warehouses`, `/branches`, `/accounts`, `/employees`, `/expense-categories` | Generic, permission-gated CRUD |
 | Recipes | `/recipes` | Ingredient lines, costing snapshots, recalculation, new versions |
-| Production | `/production` | Plans, batches, material consumption, QC-gated completion |
 | Inventory | `/inventory` | Stock balances, FEFO lots, adjustments, counts, transfers, ledger |
 | Quality | `/quality` | Batch/receipt/product inspections and temperature log |
 | Purchasing | `/purchases` | Purchase orders, approvals, goods receipts, supplier payments |
@@ -110,7 +108,6 @@ src/
 │   ├── inventory/             # FEFO stock movements, counts, transfers
 │   ├── notifications/         # Low-stock alerts
 │   ├── offline/               # Dexie offline queue
-│   ├── production/            # Planning and batch completion
 │   ├── purchasing/            # Orders, receipts, supplier payments
 │   ├── recipes/               # Recipe versions and costing
 │   ├── reports/               # Report aggregation
@@ -173,7 +170,6 @@ npm run build
 - **`DATABASE_URL is not configured`** — create `.env.local` from `.env.example` and restart the dev server.
 - **Login returns 500** — verify PostgreSQL is reachable and migrations have been applied with `npm run db:deploy`.
 - **`P1001` / connection refused** — check the host, port and credentials in `DATABASE_URL`.
-- **Production batch cannot be completed** — a passing `QualityInspection` with `referenceType: "BATCH"` must exist first.
 - **Sale creation fails with insufficient stock** — finished lots use FEFO; receive or produce stock before selling.
 - **Offline sale duplicated** — confirm the queue key is stable; sync uses it as the idempotency key.
 

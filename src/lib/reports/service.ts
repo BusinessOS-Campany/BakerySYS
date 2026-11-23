@@ -6,7 +6,7 @@ const sum = (rows: { amount?: unknown; total?: unknown; profit?: unknown; costAm
 
 export async function getReportData(db: Db, tenantId: string, days: number) {
   const since = new Date(Date.now() - Math.max(days, 1) * 86_400_000);
-  const [sales, expenses, batches, ingredientLots, finishedLots, receivableBalances, payableBalances, journalEntries] = await Promise.all([
+  const [sales, expenses, ingredientLots, finishedLots, receivableBalances, payableBalances, journalEntries] = await Promise.all([
     db.sale.findMany({
       where: { tenantId, status: "COMPLETED", invoiceDate: { gte: since } },
       select: { id: true, total: true, profit: true, costAmount: true, taxAmount: true, invoiceDate: true },
@@ -14,10 +14,6 @@ export async function getReportData(db: Db, tenantId: string, days: number) {
     db.expense.findMany({
       where: { tenantId, status: "POSTED", expenseDate: { gte: since } },
       select: { amount: true, categoryId: true },
-    }),
-    db.productionBatch.findMany({
-      where: { tenantId, createdAt: { gte: since } },
-      select: { status: true, productId: true, actualQuantity: true, rejectedQuantity: true },
     }),
     db.ingredientLot.findMany({ where: { tenantId, quantity: { gt: 0 } }, select: { quantity: true, unitCost: true } }),
     db.finishedLot.findMany({ where: { tenantId, quantity: { gt: 0 } }, select: { quantity: true, unitCost: true } }),
@@ -35,7 +31,6 @@ export async function getReportData(db: Db, tenantId: string, days: number) {
   const tax = round(sales.reduce((acc, sale) => acc + Number(sale.taxAmount), 0), 6);
   const expenseTotal = sum(expenses, "amount");
   const netProfit = round(grossProfit - expenseTotal, 6);
-  const completed = batches.filter((batch) => batch.status === "COMPLETED");
   const rawStockValue = round(ingredientLots.reduce((acc, lot) => acc + Number(lot.quantity) * Number(lot.unitCost), 0), 6);
   const finishedStockValue = round(finishedLots.reduce((acc, lot) => acc + Number(lot.quantity) * Number(lot.unitCost), 0), 6);
   const receivables = round(receivableBalances.reduce((acc, r) => acc + Number(r.amount) - Number(r.settled), 0), 6);
@@ -99,12 +94,6 @@ export async function getReportData(db: Db, tenantId: string, days: number) {
   return {
     period: { days, since: since.toISOString(), generatedAt: new Date().toISOString() },
     summary: { revenue, cogs, grossProfit, tax, expenses: expenseTotal, netProfit, rawStockValue, finishedStockValue, receivables, payables },
-    production: {
-      batches: batches.length,
-      completed: completed.length,
-      completedQuantity: round(completed.reduce((acc, b) => acc + Number(b.actualQuantity ?? 0), 0), 6),
-      rejectedQuantity: round(batches.reduce((acc, b) => acc + Number(b.rejectedQuantity ?? 0), 0), 6),
-    },
     salesByProduct,
     trialBalance,
     journalEntries: journalEntries.slice(0, 50),
