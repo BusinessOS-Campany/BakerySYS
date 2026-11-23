@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ComponentType, type FormEvent } from "react";
-import { AlertCircle, Boxes, Check, Layers, Package, Plus, RefreshCw, Wheat } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, Boxes, Check, Layers, Package, PackagePlus, Plus, RefreshCw, Wheat } from "lucide-react";
 import { apiFetch, apiSend, L } from "./shared";
 import { formatNumber, type Locale } from "@/lib/i18n/dictionary";
 
@@ -28,12 +29,20 @@ type InventoryPayload = {
   warehouses: WarehouseOption[];
 };
 
-export function InventoryPage({ locale, canManage }: { locale: Locale; canManage: boolean }) {
+export function InventoryPage({
+  locale,
+  canManage,
+  selectedIngredientId = "",
+}: {
+  locale: Locale;
+  canManage: boolean;
+  selectedIngredientId?: string;
+}) {
   const [data, setData] = useState<InventoryPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [ingredientId, setIngredientId] = useState("");
+  const [ingredientId, setIngredientId] = useState(selectedIngredientId);
   const [quantity, setQuantity] = useState("");
   const [itemState, setItemState] = useState<"GRAINS" | "GROUND">("GRAINS");
   const [cleaned, setCleaned] = useState(false);
@@ -52,6 +61,12 @@ export function InventoryPage({ locale, canManage }: { locale: Locale; canManage
   }, [locale]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (selectedIngredientId && data?.ingredients.some((entry) => entry.id === selectedIngredientId)) {
+      setIngredientId((current) => current || selectedIngredientId);
+    }
+  }, [selectedIngredientId, data]);
 
   const lots = useMemo(
     () => [...(data?.ingredientLots ?? [])].sort(
@@ -150,9 +165,14 @@ export function InventoryPage({ locale, canManage }: { locale: Locale; canManage
       </section>
 
       <section className="card p-4">
-        <h2 className="flex items-center gap-2 text-sm font-bold">
-          <Plus className="h-4 w-4" /> {L(locale, "إضافة إلى المخزون", "Add to stock")}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-bold">
+            <Plus className="h-4 w-4" /> {L(locale, "إضافة إلى المخزون", "Add to stock")}
+          </h2>
+          <Link className="text-xs text-[var(--primary)] hover:underline" href="/stock-products">
+            {L(locale, "+ إضافة منتج جديد", "+ Add new product")}
+          </Link>
+        </div>
         {!canManage ? (
           <p className="muted mt-2 text-xs">
             {L(locale, "ليست لديك صلاحية إضافة مخزون.", "You do not have permission to add stock.")}
