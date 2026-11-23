@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState, type ComponentType, type FormEvent } from "react";
 import Link from "next/link";
-import { AlertCircle, Boxes, Check, Layers, Package, PackagePlus, Plus, RefreshCw, Wheat } from "lucide-react";
+import {
+  AlertCircle, Boxes, Check, Layers, LogOut, Package, PackagePlus, Pencil,
+  Plus, RefreshCw, Trash2, Wheat, X,
+} from "lucide-react";
+import { useDialog } from "@/components/ui/dialog";
 import { apiFetch, apiSend, L } from "./shared";
 import { formatNumber, type Locale } from "@/lib/i18n/dictionary";
 
@@ -38,6 +42,7 @@ export function InventoryPage({
   canManage: boolean;
   selectedIngredientId?: string;
 }) {
+  const { confirm } = useDialog();
   const [data, setData] = useState<InventoryPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -47,6 +52,21 @@ export function InventoryPage({
   const [itemState, setItemState] = useState<"GRAINS" | "GROUND">("GRAINS");
   const [cleaned, setCleaned] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const [exitLot, setExitLot] = useState<IngredientLot | null>(null);
+  const [exitQuantity, setExitQuantity] = useState("");
+  const [exitNote, setExitNote] = useState("");
+  const [exitError, setExitError] = useState("");
+  const [exitBusy, setExitBusy] = useState(false);
+
+  const [editLot, setEditLot] = useState<IngredientLot | null>(null);
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editCost, setEditCost] = useState("");
+  const [editState, setEditState] = useState<"GRAINS" | "GROUND">("GRAINS");
+  const [editCleaned, setEditCleaned] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
+  const [deletingLotId, setDeletingLotId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -121,6 +141,121 @@ export function InventoryPage({
       setSaving(false);
     }
   }
+
+  function openExit(lot: IngredientLot) {
+    setExitLot(lot);
+    setExitQuantity("");
+    setExitNote("");
+    setExitError("");
+    setError("");
+    setMessage("");
+  }
+
+  async function submitExit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!exitLot) return;
+    const amount = Number(exitQuantity);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setExitError(L(locale, "أدخل كمية صحيحة", "Enter a valid quantity"));
+      return;
+    }
+    if (amount > Number(exitLot.quantity) + 1e-9) {
+      setExitError(L(locale, "الكمية أكبر من المتاح في الدفعة", "Quantity exceeds the batch balance"));
+      return;
+    }
+    setExitBusy(true);
+    setExitError("");
+    try {
+      const result = await apiSend<{ remaining: string | number }>(
+        `/api/inventory/lots/${exitLot.id}/exit`,
+        "POST",
+        { quantity: amount, note: exitNote.trim() || undefined },
+        locale,
+      );
+      setExitLot(null);
+      setMessage(
+        `${L(locale, "تم الصرف", "Exited")}: ${formatNumber(amount, locale)} · ${L(locale, "المتبقي", "Remaining")}: ${formatNumber(result.remaining, locale)}`,
+      );
+      await load();
+    } catch (err) {
+      setExitError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExitBusy(false);
+    }
+  }
+
+  function openEdit(lot: IngredientLot) {
+    setEditLot(lot);
+    setEditQuantity(String(Number(lot.quantity)));
+    setEditCost(String(Number(lot.unitCost)));
+    setEditState(lot.itemState === "GROUND" ? "GROUND" : "GRAINS");
+    setEditCleaned(Boolean(lot.cleaned));
+    setEditError("");
+    setError("");
+    setMessage("");
+  }
+
+  async function submitEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editLot) return;
+    const amount = Number(editQuantity);
+    const cost = Number(editCost);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setEditError(L(locale, "أدخل كمية صحيحة", "Enter a valid quantity"));
+      return;
+    }
+    if (!Number.isFinite(cost) || cost < 0) {
+      setEditError(L(locale, "أدخل سعراً صحيحاً", "Enter a valid price"));
+      return;
+    }
+    setEditBusy(true);
+    setEditError("");
+    try {
+      await apiSend(`/api/inventory/lots/${editLot.id}`, "PATCH", {
+        quantity: amount,
+        unitCost: cost,
+        itemState: editState,
+        cleaned: editCleaned,
+      }, locale);
+      setEditLot(null);
+      setMessage(L(locale, "تم تعديل الدفعة", "Stock batch updated"));
+      await load();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  async function remove(lot: IngredientLot) {
+    const ok = await confirm({
+      title: L(locale, "حذف دفعة المخزون", "Delete stock batch"),
+      message: L(
+        locale,
+        `سيتم صرف الكمية المتبقية (${formatNumber(lot.quantity, locale)}) من الدفعة «${lot.lotNumber}» وإزالة البطاقة. سيبقى سجل الحركة محفوظاً.`,
+        `The remaining quantity (${formatNumber(lot.quantity, locale)}) of batch "${lot.lotNumber}" will be exited and the card removed. The movement history is kept.`,
+      ),
+      confirmLabel: L(locale, "حذف", "Delete"),
+      tone: "danger",
+    });
+    if (!ok) return;
+    setDeletingLotId(lot.id);
+    setError("");
+    setMessage("");
+    try {
+      await apiFetch(`/api/inventory/lots/${lot.id}`, locale, { method: "DELETE" });
+      setMessage(L(locale, "تم حذف الدفعة", "Stock batch deleted"));
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeletingLotId("");
+    }
+  }
+
+  const exitPreview = Number(exitQuantity) > 0
+    ? Math.max(0, Number(exitLot?.quantity ?? 0) - Number(exitQuantity))
+    : Number(exitLot?.quantity ?? 0);
 
   return (
     <div className="space-y-4">
@@ -266,6 +401,7 @@ export function InventoryPage({
             {lots.map((lot) => {
               const isGround = (lot.itemState ?? "GRAINS") === "GROUND";
               const lineValue = Number(lot.quantity) * Number(lot.unitCost);
+              const busy = deletingLotId === lot.id;
               return (
                 <article className="card flex flex-col gap-3 p-4" key={lot.id}>
                   <div className="flex items-start justify-between gap-2">
@@ -311,12 +447,205 @@ export function InventoryPage({
                       {new Date(lot.receivedAt).toLocaleDateString(locale === "ar" ? "ar-YE-u-nu-latn" : "en-US")}
                     </span>
                   </div>
+
+                  <div className="flex flex-wrap gap-1 border-t border-[var(--border)] pt-2">
+                    <button
+                      className="btn text-[11px]"
+                      disabled={!canManage || busy}
+                      onClick={() => openExit(lot)}
+                      type="button"
+                    >
+                      <LogOut className="h-3 w-3" /> {L(locale, "صرف", "Exit")}
+                    </button>
+                    <button
+                      className="btn text-[11px]"
+                      disabled={!canManage || busy}
+                      onClick={() => openEdit(lot)}
+                      type="button"
+                    >
+                      <Pencil className="h-3 w-3" /> {L(locale, "تعديل", "Edit")}
+                    </button>
+                    <button
+                      className="btn btn-danger text-[11px]"
+                      disabled={!canManage || busy}
+                      onClick={() => void remove(lot)}
+                      type="button"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      {busy ? "..." : L(locale, "حذف", "Delete")}
+                    </button>
+                  </div>
                 </article>
               );
             })}
           </div>
         )}
       </section>
+
+      {exitLot ? (
+        <div
+          className="arap-modal-overlay"
+          onMouseDown={(event) => { if (event.target === event.currentTarget && !exitBusy) setExitLot(null); }}
+        >
+          <form
+            aria-labelledby="lot-exit-title"
+            aria-modal="true"
+            className="arap-modal"
+            dir={locale === "ar" ? "rtl" : "ltr"}
+            onSubmit={(event) => void submitExit(event)}
+            role="dialog"
+          >
+            <div className="arap-modal-header">
+              <h2 className="arap-modal-title" id="lot-exit-title">
+                {L(locale, "صرف من الدفعة", "Exit from batch")}
+              </h2>
+              <button
+                aria-label={L(locale, "إغلاق", "Close")}
+                className="arap-modal-close"
+                disabled={exitBusy}
+                onClick={() => setExitLot(null)}
+                type="button"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="arap-modal-body scroll-thin">
+              {exitError ? <p className="arap-modal-error">{exitError}</p> : null}
+              <p className="muted rounded-lg bg-[var(--surface-muted)] px-3 py-2 text-xs">
+                {exitLot.lotNumber} · {L(locale, "المتاح", "Available")}:{" "}
+                <strong className="font-semibold">{formatNumber(exitLot.quantity, locale)}</strong>
+              </p>
+              <label className="arap-modal-field" htmlFor="lot-exit-quantity">
+                <span className="arap-modal-label">{L(locale, "الكمية المصروفة", "Exit quantity")}</span>
+                <input
+                  autoFocus
+                  className="arap-modal-input"
+                  id="lot-exit-quantity"
+                  max={Number(exitLot.quantity)}
+                  min="0"
+                  onChange={(event) => setExitQuantity(event.target.value)}
+                  step="any"
+                  type="number"
+                  value={exitQuantity}
+                />
+              </label>
+              <label className="arap-modal-field" htmlFor="lot-exit-note">
+                <span className="arap-modal-label">{L(locale, "ملاحظة (اختياري)", "Note (optional)")}</span>
+                <input
+                  className="arap-modal-input"
+                  id="lot-exit-note"
+                  maxLength={300}
+                  onChange={(event) => setExitNote(event.target.value)}
+                  value={exitNote}
+                />
+              </label>
+              <p className="muted text-xs">
+                {L(locale, "المتبقي بعد الصرف", "Remaining after exit")}:{" "}
+                <strong className="font-semibold">{formatNumber(exitPreview, locale)}</strong>
+              </p>
+            </div>
+            <div className="arap-modal-footer">
+              <button className="arap-modal-save" disabled={exitBusy} type="submit">
+                {exitBusy
+                  ? L(locale, "جارٍ الصرف...", "Exiting...")
+                  : L(locale, "تأكيد الصرف", "Confirm exit")}
+              </button>
+              <button className="arap-modal-cancel" disabled={exitBusy} onClick={() => setExitLot(null)} type="button">
+                {L(locale, "إلغاء", "Cancel")}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {editLot ? (
+        <div
+          className="arap-modal-overlay"
+          onMouseDown={(event) => { if (event.target === event.currentTarget && !editBusy) setEditLot(null); }}
+        >
+          <form
+            aria-labelledby="lot-edit-title"
+            aria-modal="true"
+            className="arap-modal"
+            dir={locale === "ar" ? "rtl" : "ltr"}
+            onSubmit={(event) => void submitEdit(event)}
+            role="dialog"
+          >
+            <div className="arap-modal-header">
+              <h2 className="arap-modal-title" id="lot-edit-title">
+                {L(locale, "تعديل الدفعة", "Edit batch")}
+              </h2>
+              <button
+                aria-label={L(locale, "إغلاق", "Close")}
+                className="arap-modal-close"
+                disabled={editBusy}
+                onClick={() => setEditLot(null)}
+                type="button"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="arap-modal-body scroll-thin">
+              {editError ? <p className="arap-modal-error">{editError}</p> : null}
+              <p className="muted text-xs">{editLot.lotNumber}</p>
+              <label className="arap-modal-field" htmlFor="lot-edit-quantity">
+                <span className="arap-modal-label">{L(locale, "الكمية", "Quantity")}</span>
+                <input
+                  autoFocus
+                  className="arap-modal-input"
+                  id="lot-edit-quantity"
+                  min="0"
+                  onChange={(event) => setEditQuantity(event.target.value)}
+                  step="any"
+                  type="number"
+                  value={editQuantity}
+                />
+              </label>
+              <label className="arap-modal-field" htmlFor="lot-edit-cost">
+                <span className="arap-modal-label">{L(locale, "سعر الوحدة", "Unit price")}</span>
+                <input
+                  className="arap-modal-input"
+                  id="lot-edit-cost"
+                  min="0"
+                  onChange={(event) => setEditCost(event.target.value)}
+                  step="any"
+                  type="number"
+                  value={editCost}
+                />
+              </label>
+              <label className="arap-modal-field" htmlFor="lot-edit-state">
+                <span className="arap-modal-label">{L(locale, "حالة المنتج", "Product state")}</span>
+                <select
+                  className="arap-modal-input"
+                  id="lot-edit-state"
+                  onChange={(event) => setEditState(event.target.value as "GRAINS" | "GROUND")}
+                  value={editState}
+                >
+                  <option value="GRAINS">{L(locale, "حبوب", "Grains")}</option>
+                  <option value="GROUND">{L(locale, "مطحون", "Ground")}</option>
+                </select>
+              </label>
+              <label className="mt-1 flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  checked={editCleaned}
+                  className="h-4 w-4 accent-[var(--primary)]"
+                  onChange={(event) => setEditCleaned(event.target.checked)}
+                  type="checkbox"
+                />
+                {L(locale, "تم التنقيه", "Cleaned")}
+              </label>
+            </div>
+            <div className="arap-modal-footer">
+              <button className="arap-modal-save" disabled={editBusy} type="submit">
+                {editBusy ? L(locale, "جارٍ الحفظ...", "Saving...") : L(locale, "حفظ", "Save")}
+              </button>
+              <button className="arap-modal-cancel" disabled={editBusy} onClick={() => setEditLot(null)} type="button">
+                {L(locale, "إلغاء", "Cancel")}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }

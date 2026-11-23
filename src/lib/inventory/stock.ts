@@ -4,7 +4,7 @@ import { round, selectFefoLots, type FefoLot } from "@/lib/calculations";
 
 type StockOwner = { tenantId: string; warehouseId: string; createdById?: string | null };
 
-async function rawBalance(
+export async function rawBalance(
   tx: Db, owner: StockOwner, ingredientId: string, delta: number,
 ) {
   const existing = await tx.ingredientStock.findUnique({
