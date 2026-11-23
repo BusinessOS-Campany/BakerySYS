@@ -142,19 +142,13 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     searchFields: ["code", "nameAr", "nameEn"],
     branchScoped: true,
     fields: [
-      f("code", "الرمز", "Code", "text", { required: true, list: true }),
-      f("nameAr", "الاسم (عربي)", "Name (Arabic)", "text", { required: true, list: true }),
-      f("nameEn", "الاسم (إنجليزي)", "Name (English)", "text", { required: true }),
-      f("kind", "النوع", "Kind", "select", {
-        defaultValue: "BOTH", list: true,
-        options: [
-          { value: "RAW", label: { ar: "مواد خام", en: "Raw materials" } },
-          { value: "FINISHED", label: { ar: "منتجات تامة", en: "Finished goods" } },
-          { value: "BOTH", label: { ar: "كلاهما", en: "Both" } },
-        ],
-      }),
-      f("branchId", "الفرع", "Branch", "select", { optionResource: "branches" }),
-      active,
+      f("nameAr", "الاسم الكامل", "Full name", "text", { required: true, list: true }),
+      // Derived automatically — the form only asks for the full name.
+      f("code", "الرمز", "Code", "text", { hidden: true, autoCode: "WH" }),
+      f("nameEn", "الاسم (إنجليزي)", "Name (English)", "text", { hidden: true, defaultFrom: "nameAr" }),
+      f("kind", "النوع", "Kind", "text", { hidden: true, defaultValue: "BOTH", list: true }),
+      f("branchId", "الفرع", "Branch", "select", { hidden: true, optionResource: "branches" }),
+      f("active", "نشط", "Active", "boolean", { hidden: true, defaultValue: true, list: true }),
     ],
   },
   customers: {
