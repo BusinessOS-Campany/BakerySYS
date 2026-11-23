@@ -9,6 +9,7 @@ export default async function Page() {
     <SalesPage
       locale={auth.locale}
       canRefund={canAny(auth, ["sales.refund"])}
+      canEdit={canAny(auth, ["sales.create"])}
       currency={auth.tenant.currencyCode}
       decimalPlaces={auth.tenant.decimalPlaces}
     />

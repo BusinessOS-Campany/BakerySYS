@@ -5,6 +5,8 @@ import {
   apiFetch, apiSend, DataPanel, FieldInput, L, statusBadge, useList,
   type Field, type FormValues, type Locale,
 } from "./shared";
+import { useDialog } from "@/components/ui/dialog";
+import { SaleEditDialog } from "@/components/sales/sale-edit-dialog";
 import { formatDate, formatMoney } from "@/lib/i18n/dictionary";
 
 type SaleRow = {
@@ -27,16 +29,20 @@ type SaleDetail = {
 export function SalesPage({
   locale,
   canRefund,
+  canEdit,
   currency,
   decimalPlaces,
 }: {
   locale: Locale;
   canRefund: boolean;
+  canEdit: boolean;
   currency: string;
   decimalPlaces: number;
 }) {
   const [refresh, setRefresh] = useState(0);
   const [selectedId, setSelectedId] = useState("");
+  const [editingId, setEditingId] = useState("");
+  const { confirm } = useDialog();
   const sales = useList<SaleRow>("/api/sales?pageSize=100", undefined, locale, refresh);
   const money = (value: string | number) => formatMoney(Number(value), locale, currency, decimalPlaces);
 
@@ -67,10 +73,42 @@ export function SalesPage({
         ]}
         rowActions={[
           {
+            label: L(locale, "تعديل", "Edit"),
+            tone: "primary",
+            visible: (row) => canEdit && row.status === "COMPLETED" && Number(row.refundedAmount) <= 0.000001,
+            run: (row) => setEditingId(row.id),
+          },
+          {
+            label: L(locale, "إلغاء", "Cancel"),
+            tone: "danger",
+            visible: (row) => canEdit && row.status === "COMPLETED" && Number(row.refundedAmount) <= 0.000001,
+            run: (row, reload, setError) => {
+              void (async () => {
+                const ok = await confirm({
+                  title: L(locale, "إلغاء الفاتورة", "Cancel invoice"),
+                  message: L(
+                    locale,
+                    `إلغاء الفاتورة ${row.invoiceNumber}؟ ستُعاد الكميات إلى المخزون ويُعكس القيد المحاسبي.`,
+                    `Cancel invoice ${row.invoiceNumber}? Stock will be restored and the journal reversed.`,
+                  ),
+                  confirmLabel: L(locale, "إلغاء الفاتورة", "Cancel invoice"),
+                  tone: "danger",
+                });
+                if (!ok) return;
+                try {
+                  await apiFetch(`/api/sales/${row.id}`, locale, { method: "DELETE" });
+                  await reload();
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : String(err));
+                }
+              })();
+            },
+          },
+          {
             label: L(locale, "مرتجع", "Refund"),
             tone: "secondary",
             requiresManage: true,
-            visible: () => canRefund,
+            visible: (row) => canRefund && row.status === "COMPLETED",
             run: (row) => setSelectedId(row.id),
           },
         ]}
@@ -81,6 +119,17 @@ export function SalesPage({
         setSelectedId("");
         await sales.reload();
       }} /> : null}
+
+      {editingId ? (
+        <SaleEditDialog
+          saleId={editingId}
+          locale={locale}
+          currency={currency}
+          decimalPlaces={decimalPlaces}
+          onClose={() => setEditingId("")}
+          onSaved={async () => { await sales.reload(); }}
+        />
+      ) : null}
     </div>
   );
 }

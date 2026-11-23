@@ -17,12 +17,28 @@ export const GET = apiRoute({
     });
     if (!session) throw new AppError("NOT_FOUND", "Session not found", "الوردية غير موجودة");
     assertBranchAccess(auth, session.branchId);
-    const items = await db.cashMovement.findMany({
-      where: { tenantId: auth.user.tenantId, sessionId },
-      orderBy: { createdAt: "desc" },
-      take: 50,
+    const [items, sales] = await Promise.all([
+      db.cashMovement.findMany({
+        where: { tenantId: auth.user.tenantId, sessionId },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+      db.sale.findMany({
+        where: { tenantId: auth.user.tenantId, cashSessionId: sessionId },
+        select: { id: true, invoiceNumber: true, status: true, refundedAmount: true },
+      }),
+    ]);
+    const byInvoice = new Map(sales.map((sale) => [sale.invoiceNumber, sale]));
+    const enriched = items.map((movement) => {
+      const sale = movement.reference ? byInvoice.get(movement.reference) ?? null : null;
+      return {
+        ...movement,
+        saleId: sale?.id ?? null,
+        saleStatus: sale?.status ?? null,
+        saleRefundedAmount: sale ? Number(sale.refundedAmount) : 0,
+      };
     });
-    return serialize({ items });
+    return serialize({ items: enriched });
   },
 });
 

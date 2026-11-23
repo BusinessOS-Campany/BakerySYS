@@ -6,6 +6,7 @@ import {
   ShoppingCart, Trash2, Wallet, Wifi, WifiOff, X,
 } from "lucide-react";
 import { useDialog } from "@/components/ui/dialog";
+import { SaleEditDialog } from "@/components/sales/sale-edit-dialog";
 import { enqueueSale, listQueuedSales, removeQueuedSale, updateQueuedSale } from "@/lib/offline/db";
 import { formatMoney, formatNumber, translate, type Locale } from "@/lib/i18n/dictionary";
 
@@ -19,7 +20,17 @@ type Branch = { id: string; nameAr: string; nameEn: string };
 type Customer = { id: string; nameAr: string; nameEn: string; phone: string | null; code: string };
 type Register = { id: string; branchId: string; code: string; nameAr: string; nameEn: string };
 type Session = { id: string; registerId: string; openingBalance: string | number; openedAt: string };
-type CashMovement = { id: string; kind: string; amount: string | number; reason: string | null; createdAt: string };
+type CashMovement = {
+  id: string;
+  kind: string;
+  amount: string | number;
+  reason: string | null;
+  reference: string | null;
+  createdAt: string;
+  saleId: string | null;
+  saleStatus: string | null;
+  saleRefundedAmount: string | number;
+};
 
 export type SessionSummary = {
   openingBalance: number;
@@ -65,7 +76,7 @@ export function PosScreen({
   canCloseSession: boolean;
   data: PosData;
 }) {
-  const { prompt } = useDialog();
+  const { prompt, confirm } = useDialog();
   const t = (key: string) => translate(locale, key);
   const money = (value: number) => formatMoney(value, locale, currency, decimalPlaces);
   const branchId = defaultBranchId ?? "";
@@ -91,6 +102,7 @@ export function PosScreen({
   const [cashOutBusy, setCashOutBusy] = useState(false);
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
   const [summary, setSummary] = useState<SessionSummary | null>(data.summary);
+  const [editingSaleId, setEditingSaleId] = useState("");
 
   useEffect(() => {
     if (!message) return;
@@ -351,6 +363,30 @@ export function PosScreen({
     }
   }
 
+  async function voidSale(movement: CashMovement) {
+    if (!movement.saleId) return;
+    const ok = await confirm({
+      title: t("pos.voidSale"),
+      message: `${t("pos.voidConfirm")}\n${movement.reference ?? ""}`,
+      confirmLabel: t("pos.voidSale"),
+      tone: "danger",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/sales/${movement.saleId}`, { method: "DELETE" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error?.[locale === "ar" ? "messageAr" : "message"] ?? t("common.error"));
+      setMessage(t("pos.saleCancelled"));
+      await refreshCashMovements();
+      await refreshSummary();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("common.error"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -543,19 +579,49 @@ export function PosScreen({
           ) : (
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {cashMovements.map((movement) => {
-                const isOut = movement.kind === "OUT";
+                const isOut = movement.kind === "OUT" || movement.kind === "VOID";
+                const saleId = movement.saleId;
+                const canEdit = Boolean(
+                  saleId && movement.saleStatus === "COMPLETED"
+                  && Number(movement.saleRefundedAmount) <= 0.000001,
+                );
                 return (
-                  <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] p-2 text-xs" key={movement.id}>
-                    <div className="min-w-0">
-                      <div className="truncate font-semibold">
-                        {t(`pos.movement.${movement.kind}`)}
-                        {movement.reason ? <span className="muted"> · {movement.reason}</span> : null}
+                  <div className="rounded-lg border border-[var(--border)] p-2 text-xs" key={movement.id}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold">
+                          {t(`pos.movement.${movement.kind}`)}
+                          {movement.reason ? <span className="muted"> · {movement.reason}</span> : null}
+                        </div>
+                        <div className="muted">{new Date(movement.createdAt).toLocaleString(locale === "ar" ? "ar-YE-u-nu-latn" : "en-US")}</div>
                       </div>
-                      <div className="muted">{new Date(movement.createdAt).toLocaleString(locale === "ar" ? "ar-YE-u-nu-latn" : "en-US")}</div>
+                      <strong className={isOut ? "text-[var(--danger)]" : "text-emerald-600"}>
+                        {isOut ? "−" : "+"}{money(Number(movement.amount))}
+                      </strong>
                     </div>
-                    <strong className={isOut ? "text-[var(--danger)]" : "text-emerald-600"}>
-                      {isOut ? "−" : "+"}{money(Number(movement.amount))}
-                    </strong>
+                    {canEdit ? (
+                      <div className="mt-2 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2">
+                        <span className="muted truncate">{movement.reference}</span>
+                        <span className="flex shrink-0 gap-1">
+                          <button
+                            className="btn text-[11px]"
+                            disabled={busy}
+                            onClick={() => setEditingSaleId(saleId ?? "")}
+                            type="button"
+                          >
+                            {t("pos.editSale")}
+                          </button>
+                          <button
+                            className="btn btn-danger text-[11px]"
+                            disabled={busy}
+                            onClick={() => void voidSale(movement)}
+                            type="button"
+                          >
+                            {t("pos.voidSale")}
+                          </button>
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
@@ -631,6 +697,20 @@ export function PosScreen({
             </div>
           </form>
         </div>
+      ) : null}
+
+      {editingSaleId ? (
+        <SaleEditDialog
+          saleId={editingSaleId}
+          locale={locale}
+          currency={currency}
+          decimalPlaces={decimalPlaces}
+          onClose={() => setEditingSaleId("")}
+          onSaved={async () => {
+            await refreshCashMovements();
+            await refreshSummary();
+          }}
+        />
       ) : null}
     </div>
   );

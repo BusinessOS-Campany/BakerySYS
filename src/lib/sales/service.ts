@@ -216,6 +216,7 @@ export async function refundSale(tx: Db, auth: AuthContext, input: {
   const sale = await tx.sale.findFirst({ where: { id: input.saleId, tenantId: auth.user.tenantId } });
   if (!sale) throw new AppError("NOT_FOUND", "Sale not found", "البيع غير موجود");
   if (sale.status === "REFUNDED") throw new AppError("INVALID_STATE", "Sale already refunded", "تم استرداد الفاتورة مسبقاً");
+  if (sale.status === "CANCELLED") throw new AppError("INVALID_STATE", "Cancelled invoice cannot be refunded", "لا يمكن استرداد فاتورة ملغاة");
   if (!input.items.length) throw new AppError("VALIDATION", "No refund items", "لا توجد بنود للاسترجاع");
   const saleItems = await tx.saleItem.findMany({ where: { saleId: sale.id } });
   const requested = new Map<string, number>();
@@ -344,6 +345,276 @@ export async function refundSale(tx: Db, auth: AuthContext, input: {
     });
   }
   return postedReturn;
+}
+
+/** Shared guard: only a completed invoice with no prior returns may be changed. */
+async function requireEditableSale(tx: Db, auth: AuthContext, saleId: string) {
+  const sale = await tx.sale.findFirst({ where: { id: saleId, tenantId: auth.user.tenantId } });
+  if (!sale) throw new AppError("NOT_FOUND", "Sale not found", "الفاتورة غير موجودة");
+  assertBranchAccess(auth, sale.branchId);
+  if (sale.status !== "COMPLETED") {
+    throw new AppError(
+      "INVALID_STATE",
+      "Only completed invoices can be edited or cancelled",
+      "يمكن تعديل أو إلغاء الفواتير المكتملة فقط",
+    );
+  }
+  if (Number(sale.refundedAmount) > 0.000001) {
+    throw new AppError(
+      "INVALID_STATE",
+      "This invoice has previous returns; use a refund instead",
+      "تحتوي هذه الفاتورة على مرتجعات سابقة؛ استخدم المرتجع بدلاً من ذلك",
+    );
+  }
+  return sale;
+}
+
+/**
+ * Edits the bread quantities on an invoice. Stock, line totals, invoice totals
+ * and the journal are adjusted in place; payments and tender are untouched.
+ */
+export async function updateSaleQuantities(tx: Db, auth: AuthContext, input: {
+  saleId: string;
+  lines: { saleItemId: string; quantity: number }[];
+}) {
+  const sale = await requireEditableSale(tx, auth, input.saleId);
+  if (!input.lines?.length) throw new AppError("VALIDATION", "No lines to update", "لا توجد بنود للتعديل");
+  const saleItems = await tx.saleItem.findMany({
+    where: { tenantId: auth.user.tenantId, saleId: sale.id },
+  });
+  if (!saleItems.length) throw new AppError("NOT_FOUND", "Invoice lines not found", "بنود الفاتورة غير موجودة");
+
+  const requested = new Map<string, number>();
+  for (const line of input.lines) {
+    const original = saleItems.find((i) => i.id === line.saleItemId);
+    if (!original) throw new AppError("NOT_FOUND", "Invoice line not found", "بند الفاتورة غير موجود");
+    if (!Number.isFinite(line.quantity) || line.quantity <= 0) {
+      throw new AppError("VALIDATION", "Quantity must be greater than zero", "الكمية يجب أن تكون أكبر من صفر");
+    }
+    requested.set(original.id, round(line.quantity, 6));
+  }
+
+  const products = await tx.product.findMany({
+    where: { tenantId: auth.user.tenantId, id: { in: saleItems.map((i) => i.productId) } },
+    select: { id: true, taxRate: true },
+  });
+  const taxRates = new Map(
+    products.map((p) => [p.id, Number(p.taxRate) || Number(auth.tenant.taxRate) || 0]),
+  );
+
+  type AdjustedLine = {
+    item: (typeof saleItems)[number];
+    quantity: number;
+    discount: number;
+    tax: number;
+    lineTotal: number;
+    cogs: number;
+  };
+  const adjusted: AdjustedLine[] = [];
+  let subtotal = 0;
+  let discountTotal = 0;
+  let taxTotal = 0;
+  let total = 0;
+  let cogs = 0;
+
+  for (const item of saleItems) {
+    const oldQty = round(Number(item.quantity), 6);
+    const quantity = requested.get(item.id) ?? oldQty;
+    const unitPrice = round(Number(item.unitPrice), 6);
+    const unitCost = round(Number(item.unitCost), 6);
+    const discount = oldQty > 0 ? round(Number(item.discount) * quantity / oldQty, 6) : 0;
+    const totals = calcLineTotals({
+      quantity, unitPrice, discount,
+      taxRate: taxRates.get(item.productId) ?? 0,
+      taxEnabled: auth.tenant.taxEnabled,
+    });
+    const lineCogs = round(unitCost * quantity, 6);
+    subtotal = round(subtotal + unitPrice * quantity, 6);
+    discountTotal = round(discountTotal + discount, 6);
+    taxTotal = round(taxTotal + totals.tax, 6);
+    total = round(total + totals.total, 6);
+    cogs = round(cogs + lineCogs, 6);
+    adjusted.push({ item, quantity, discount, tax: totals.tax, lineTotal: totals.total, cogs: lineCogs });
+  }
+
+  const paidAmount = round(Number(sale.paidAmount), 6);
+  if (total > paidAmount + 0.000001) {
+    throw new AppError(
+      "VALIDATION",
+      "New invoice total exceeds the amount already paid; record a new sale for the difference",
+      "الإجمالي الجديد أكبر من المبلغ المدفوع؛ سجّل بيعاً جديداً بالفرق",
+    );
+  }
+
+  for (const line of adjusted) {
+    const delta = round(line.quantity - Number(line.item.quantity), 6);
+    if (Math.abs(delta) < 0.000001) continue;
+    const common = {
+      tenantId: auth.user.tenantId, warehouseId: sale.warehouseId,
+      productId: line.item.productId, variantId: line.item.variantId,
+      quantity: Math.abs(delta), movementType: "SALE_EDIT",
+      referenceType: "SALE", referenceId: sale.id,
+      note: `Edit ${sale.invoiceNumber}`, createdById: auth.user.id,
+    };
+    if (delta > 0) {
+      await removeFinishedStock(tx, {
+        ...common, allowNegative: true,
+        fallbackUnitCost: round(Number(line.item.unitCost), 6),
+      });
+    } else {
+      await addFinishedStock(tx, {
+        ...common, unitCost: round(Number(line.item.unitCost), 6),
+      });
+    }
+  }
+
+  const payments = await tx.salePayment.findMany({
+    where: { tenantId: auth.user.tenantId, saleId: sale.id },
+  });
+  let cashAmount = 0;
+  let bankAmount = 0;
+  let creditAmount = 0;
+  for (const payment of payments) {
+    const amount = Number(payment.amount);
+    if (payment.method === "CASH") cashAmount += amount;
+    else if (payment.method === "CREDIT") creditAmount += amount;
+    else bankAmount += amount;
+  }
+
+  if (sale.journalId) {
+    await reverseJournal(tx, {
+      tenantId: auth.user.tenantId, entryId: sale.journalId, createdById: auth.user.id,
+      description: `Reverse ${sale.invoiceNumber} for quantity edit`,
+    });
+  }
+  const journal = await postJournal(tx, {
+    tenantId: auth.user.tenantId, branchId: sale.branchId,
+    description: `Sale edit ${sale.invoiceNumber}`,
+    referenceType: "SALE", referenceId: sale.id, createdById: auth.user.id,
+    lines: buildSaleJournalLines({
+      cashAmount, bankAmount, creditAmount, total, taxTotal, cogs,
+      invoiceNumber: sale.invoiceNumber,
+    }),
+  });
+
+  const oldOverpayment = round(Math.max(0, paidAmount - Number(sale.total)), 6);
+  const newOverpayment = round(Math.max(0, paidAmount - total), 6);
+  if (sale.customerId && Math.abs(newOverpayment - oldOverpayment) > 0.000001) {
+    await tx.customer.update({
+      where: { id: sale.customerId },
+      data: { balance: { increment: round(oldOverpayment - newOverpayment, 6) } },
+    });
+  }
+
+  for (const line of adjusted) {
+    await tx.saleItem.update({
+      where: { id: line.item.id },
+      data: { quantity: line.quantity, discount: line.discount, tax: line.tax, lineTotal: line.lineTotal },
+    });
+  }
+  const posted = await tx.sale.update({
+    where: { id: sale.id },
+    data: {
+      subtotal, discountAmount: discountTotal, taxAmount: taxTotal, total,
+      costAmount: cogs, profit: round(total - taxTotal - cogs, 6), journalId: journal.id,
+    },
+  });
+  return { sale: posted, items: adjusted };
+}
+
+/**
+ * Cancels an invoice instead of deleting it: restores stock, reverses the
+ * journal, clears the receivable and keeps the invoice for audit.
+ */
+export async function voidSale(tx: Db, auth: AuthContext, input: {
+  saleId: string;
+  reason?: string;
+}) {
+  const sale = await requireEditableSale(tx, auth, input.saleId);
+  const reason = input.reason?.trim() || `إلغاء فاتورة ${sale.invoiceNumber}`;
+
+  const items = await tx.saleItem.findMany({
+    where: { tenantId: auth.user.tenantId, saleId: sale.id },
+  });
+  for (const item of items) {
+    const quantity = round(Number(item.quantity), 6);
+    if (quantity <= 0) continue;
+    await addFinishedStock(tx, {
+      tenantId: auth.user.tenantId, warehouseId: sale.warehouseId,
+      productId: item.productId, variantId: item.variantId, quantity,
+      unitCost: round(Number(item.unitCost), 6),
+      movementType: "SALE_VOID", referenceType: "SALE_VOID", referenceId: sale.id,
+      note: reason, createdById: auth.user.id,
+    });
+  }
+
+  if (sale.journalId) {
+    await reverseJournal(tx, {
+      tenantId: auth.user.tenantId, entryId: sale.journalId, createdById: auth.user.id,
+      description: reason,
+    });
+  }
+
+  const payments = await tx.salePayment.findMany({
+    where: { tenantId: auth.user.tenantId, saleId: sale.id },
+  });
+  let cashAmount = 0;
+  let creditAmount = 0;
+  for (const payment of payments) {
+    const amount = Number(payment.amount);
+    if (payment.method === "CASH") cashAmount += amount;
+    else if (payment.method === "CREDIT") creditAmount += amount;
+  }
+
+  if (sale.customerId) {
+    const receivables = await tx.customerReceivable.findMany({
+      where: {
+        tenantId: auth.user.tenantId, customerId: sale.customerId,
+        sourceType: "SALE", sourceId: sale.id, status: { in: ["OPEN", "PARTIAL"] },
+      },
+    });
+    for (const receivable of receivables) {
+      await tx.customerReceivable.update({
+        where: { id: receivable.id },
+        data: { settled: round(Number(receivable.amount), 6), status: "PAID" },
+      });
+    }
+    const overpayment = round(
+      Math.max(0, Number(sale.paidAmount) - Number(sale.total)), 6,
+    );
+    const balanceChange = round(overpayment - creditAmount, 6);
+    if (Math.abs(balanceChange) > 0.000001) {
+      await tx.customer.update({
+        where: { id: sale.customerId },
+        data: { balance: { increment: balanceChange } },
+      });
+    }
+    await tx.customerTransaction.create({
+      data: {
+        tenantId: auth.user.tenantId, customerId: sale.customerId,
+        kind: "PAYMENT", amount: round(Number(sale.total), 6),
+        notes: reason, sourceType: "SALE", sourceId: sale.id,
+      },
+    });
+  }
+
+  if (sale.cashSessionId && cashAmount > 0) {
+    await tx.cashMovement.create({
+      data: {
+        tenantId: auth.user.tenantId, sessionId: sale.cashSessionId,
+        kind: "VOID", amount: round(cashAmount, 6),
+        reference: sale.invoiceNumber, reason,
+      },
+    });
+  }
+
+  return tx.sale.update({
+    where: { id: sale.id },
+    data: {
+      status: "CANCELLED",
+      notes: sale.notes ? `${sale.notes} · ${reason}` : reason,
+    },
+  });
 }
 
 export async function openCashSession(tx: Db, auth: AuthContext, input: {
