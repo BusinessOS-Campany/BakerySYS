@@ -89,6 +89,8 @@ export default async function PosPage() {
       defaultBranchId={auth.branchId ?? branches[0]?.id ?? null}
       canOpenSession={auth.permissions.has("pos.open") || auth.roles.includes("OWNER")}
       canCloseSession={canCloseSession}
+      tenantName={auth.locale === "ar" ? auth.tenant.nameAr : auth.tenant.nameEn}
+      cashierName={auth.locale === "ar" ? auth.user.nameAr : auth.user.nameEn}
       data={serialize({ products, warehouses, branches, customers, registers, openSession, summary }) as unknown as PosData}
     />
   );

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useDialog } from "@/components/ui/dialog";
 import { SaleEditDialog } from "@/components/sales/sale-edit-dialog";
+import { SaleSuccessDialog, type SaleReceipt } from "@/components/pos/sale-success-dialog";
 import { enqueueSale, listQueuedSales, removeQueuedSale, updateQueuedSale } from "@/lib/offline/db";
 import { formatMoney, formatNumber, translate, type Locale } from "@/lib/i18n/dictionary";
 
@@ -64,6 +65,8 @@ export function PosScreen({
   defaultBranchId,
   canOpenSession,
   canCloseSession,
+  tenantName,
+  cashierName,
   data,
 }: {
   locale: Locale;
@@ -74,6 +77,8 @@ export function PosScreen({
   defaultBranchId: string | null;
   canOpenSession: boolean;
   canCloseSession: boolean;
+  tenantName: string;
+  cashierName: string;
   data: PosData;
 }) {
   const { prompt, confirm } = useDialog();
@@ -94,7 +99,7 @@ export function PosScreen({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [invoice, setInvoice] = useState("");
+  const [receipt, setReceipt] = useState<SaleReceipt | null>(null);
   const [cashOutOpen, setCashOutOpen] = useState(false);
   const [cashOutAmount, setCashOutAmount] = useState("");
   const [cashOutReason, setCashOutReason] = useState("");
@@ -230,7 +235,7 @@ export function PosScreen({
   async function checkout() {
     setError("");
     setMessage("");
-    setInvoice("");
+    setReceipt(null);
     if (lines.length === 0) { setError(t("pos.cartEmpty")); return; }
     if (!branchId || !warehouseId) { setError(t("common.branch")); return; }
     if (method === "CREDIT" && !customerId) { setError(t("pos.customer")); return; }
@@ -264,8 +269,27 @@ export function PosScreen({
         throw new Error(body?.error?.[locale === "ar" ? "messageAr" : "message"] ?? "Sale failed");
       }
       const result = await response.json();
-      setInvoice(String(result?.sale?.invoiceNumber ?? ""));
-      setMessage(t("pos.saleComplete"));
+      const sale = result?.sale ?? {};
+      const selectedCustomer = data.customers.find((c) => c.id === customerId);
+      setReceipt({
+        invoiceNumber: String(sale.invoiceNumber ?? ""),
+        invoiceDate: String(sale.invoiceDate ?? new Date().toISOString()),
+        customer: selectedCustomer
+          ? (locale === "ar" ? selectedCustomer.nameAr : selectedCustomer.nameEn)
+          : t("pos.customerOptional"),
+        paymentMethod: t(`pos.method.${onAccount ? "CREDIT" : method}`),
+        lines: lines.map((line) => ({
+          name: locale === "ar" ? line.product.nameAr : line.product.nameEn,
+          quantity: line.quantity,
+          unitPrice: Number(line.product.sellingPrice),
+          amount: line.net,
+        })),
+        subtotal: Number(sale.subtotal ?? subtotal),
+        discount: Number(sale.discountAmount ?? discount),
+        tax: Number(sale.taxAmount ?? taxTotal),
+        total: Number(sale.total ?? total),
+        paid: Number(sale.paidAmount ?? paidNumber),
+      });
       setCart({}); setDiscount(0); setPaid(""); setCustomerId("");
       void refreshCashMovements();
       void refreshSummary();
@@ -281,6 +305,16 @@ export function PosScreen({
     } finally {
       setBusy(false);
     }
+  }
+
+  function startNewSale() {
+    setReceipt(null);
+    setCart({});
+    setDiscount(0);
+    setPaid("");
+    setCustomerId("");
+    setMessage("");
+    setError("");
   }
 
   async function openRegister() {
@@ -352,7 +386,6 @@ export function PosScreen({
         throw new Error(payload?.error?.[locale === "ar" ? "messageAr" : "message"] ?? t("common.error"));
       }
       setCashOutOpen(false);
-      setInvoice("");
       setMessage(t("pos.cashOutSuccess"));
       await refreshCashMovements();
       await refreshSummary();
@@ -453,7 +486,7 @@ export function PosScreen({
       {message ? (
         <div className="fixed inset-x-0 bottom-4 z-50 flex justify-center px-4" role="status">
           <div className="flex w-full max-w-md items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 shadow-lg">
-            <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />{message} {invoice ? `#${invoice}` : ""}</span>
+            <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />{message}</span>
             <button onClick={() => setMessage("")} type="button">×</button>
           </div>
         </div>
@@ -710,6 +743,22 @@ export function PosScreen({
             await refreshCashMovements();
             await refreshSummary();
           }}
+        />
+      ) : null}
+
+      {receipt ? (
+        <SaleSuccessDialog
+          receipt={receipt}
+          locale={locale}
+          currency={currency}
+          decimalPlaces={decimalPlaces}
+          tenantName={tenantName}
+          cashierName={cashierName}
+          branchName={locale === "ar"
+            ? (data.branches.find((b) => b.id === branchId)?.nameAr ?? "")
+            : (data.branches.find((b) => b.id === branchId)?.nameEn ?? "")}
+          onClose={() => setReceipt(null)}
+          onNewSale={startNewSale}
         />
       ) : null}
     </div>

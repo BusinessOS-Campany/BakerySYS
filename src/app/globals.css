@@ -332,6 +332,8 @@ table.data-table tbody tr:hover { background: var(--surface-muted); }
   background: #191919;
   padding: 1rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
 }
+.arap-modal-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 380px) { .arap-modal-actions { grid-template-columns: 1fr; } }
 .arap-modal-save,
 .arap-modal-cancel {
   display: inline-flex;
@@ -392,6 +394,7 @@ table.data-table tbody tr:hover { background: var(--surface-muted); }
 .animate-in { animation: fadeUp .2s ease-out; }
 
 @page { size: A4; margin: 0; }
+.invoice-print-root { display: none; }
 .statement-sheet {
   width: 210mm;
   height: 297mm;
@@ -448,4 +451,39 @@ table.data-table tbody tr:hover { background: var(--surface-muted); }
     transform: none !important;
     width: auto !important;
   }
+  .invoice-print-root,
+  .invoice-print-root * { visibility: visible !important; }
+  .invoice-print-root {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 180mm;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 12mm;
+    background: #fff;
+    color: #111;
+    font-family: "Noto Sans Arabic", "Segoe UI", Tahoma, Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.5;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  .invoice-print-head { margin-bottom: 6mm; text-align: center; }
+  .invoice-print-head strong { display: block; font-size: 16pt; }
+  .invoice-print-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2mm;
+    margin-bottom: 6mm;
+  }
+  .invoice-print-root table { width: 100%; border-collapse: collapse; }
+  .invoice-print-root th,
+  .invoice-print-root td { border: 1px solid #bbb; padding: 2mm; text-align: start; }
+  .invoice-print-root th { background: #f2f2f2; }
+  .invoice-print-totals { margin-top: 6mm; margin-inline-start: auto; width: 70mm; }
+  .invoice-print-totals > div { display: flex; justify-content: space-between; gap: 4mm; padding: 1mm 0; }
+  .invoice-print-totals .invoice-print-total { border-top: 1px solid #111; font-weight: 700; }
 }
