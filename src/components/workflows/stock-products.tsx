@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { AlertCircle, Boxes, Check, PackagePlus, RefreshCw } from "lucide-react";
+import { AlertCircle, Boxes, Check, PackagePlus, Pencil, RefreshCw, Trash2, X } from "lucide-react";
+import { useDialog } from "@/components/ui/dialog";
 import { apiFetch, apiSend, L } from "./shared";
 import { formatNumber, type Locale } from "@/lib/i18n/dictionary";
 
@@ -12,6 +13,7 @@ type StockProduct = {
   sku: string;
   nameAr: string;
   nameEn: string;
+  baseUnitId: string;
   currentCost: string | number;
   minStock: string | number;
   active: boolean;
@@ -19,17 +21,22 @@ type StockProduct = {
 type Payload = { items: StockProduct[]; units: UnitOption[] };
 
 export function StockProductsPage({ locale, canManage }: { locale: Locale; canManage: boolean }) {
+  const { confirm } = useDialog();
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [nameAr, setNameAr] = useState("");
-  const [nameEn, setNameEn] = useState("");
-  const [sku, setSku] = useState("");
   const [unitId, setUnitId] = useState("");
   const [currentCost, setCurrentCost] = useState("");
-  const [minStock, setMinStock] = useState("");
   const [saving, setSaving] = useState(false);
-  const [created, setCreated] = useState<StockProduct | null>(null);
+  const [editing, setEditing] = useState<StockProduct | null>(null);
+  const [editNameAr, setEditNameAr] = useState("");
+  const [editUnitId, setEditUnitId] = useState("");
+  const [editCost, setEditCost] = useState("");
+  const [editError, setEditError] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,10 +54,20 @@ export function StockProductsPage({ locale, canManage }: { locale: Locale; canMa
 
   useEffect(() => { void load(); }, [load]);
 
+  function unitName(id: string) {
+    const unit = data?.units.find((entry) => entry.id === id);
+    if (!unit) return "—";
+    return locale === "ar" ? unit.nameAr : unit.nameEn;
+  }
+
+  function productName(item: StockProduct) {
+    return locale === "ar" ? item.nameAr : item.nameEn || item.nameAr;
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    setCreated(null);
+    setNotice("");
     if (!nameAr.trim()) {
       setError(L(locale, "أدخل اسم المنتج", "Enter the product name"));
       return;
@@ -59,23 +76,85 @@ export function StockProductsPage({ locale, canManage }: { locale: Locale; canMa
     try {
       const product = await apiSend<StockProduct>("/api/stock-products", "POST", {
         nameAr: nameAr.trim(),
-        nameEn: nameEn.trim(),
-        sku: sku.trim(),
         unitId: unitId || undefined,
         currentCost: Number(currentCost) || 0,
-        minStock: Number(minStock) || 0,
       }, locale);
-      setCreated(product);
+      setNotice(`${L(locale, "تمت إضافة المنتج:", "Product added:")} ${productName(product)}`);
       setNameAr("");
-      setNameEn("");
-      setSku("");
       setCurrentCost("");
-      setMinStock("");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  function openEdit(item: StockProduct) {
+    setEditing(item);
+    setEditNameAr(item.nameAr);
+    setEditUnitId(item.baseUnitId || unitId);
+    setEditCost(String(Number(item.currentCost)));
+    setEditError("");
+    setError("");
+    setNotice("");
+  }
+
+  async function submitEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editing) return;
+    setEditError("");
+    if (!editNameAr.trim()) {
+      setEditError(L(locale, "أدخل اسم المنتج", "Enter the product name"));
+      return;
+    }
+    setEditBusy(true);
+    try {
+      await apiSend(`/api/stock-products/${editing.id}`, "PATCH", {
+        nameAr: editNameAr.trim(),
+        unitId: editUnitId,
+        currentCost: Number(editCost) || 0,
+      }, locale);
+      setEditing(null);
+      setNotice(L(locale, "تم تعديل المنتج", "Product updated"));
+      await load();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  async function remove(item: StockProduct) {
+    const ok = await confirm({
+      title: L(locale, "حذف المنتج", "Delete product"),
+      message: L(
+        locale,
+        `هل تريد حذف «${item.nameAr}»؟ إذا كان المنتج مستخدماً في المخزون فسيتم إلغاء تفعيله فقط.`,
+        `Delete "${productName(item)}"? If it is already used in stock, it will only be deactivated.`,
+      ),
+      confirmLabel: L(locale, "حذف", "Delete"),
+      tone: "danger",
+    });
+    if (!ok) return;
+    setDeletingId(item.id);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`/api/stock-products/${item.id}`, { method: "DELETE" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error?.[locale === "ar" ? "messageAr" : "message"] ?? L(locale, "تعذّر الحذف", "Delete failed"));
+      }
+      setNotice(payload.deactivated
+        ? L(locale, "المنتج مستخدم في المخزون، تم إلغاء تفعيله", "Product is used in stock, so it was deactivated")
+        : L(locale, "تم حذف المنتج", "Product deleted"));
+      if (editing?.id === item.id) setEditing(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeletingId("");
     }
   }
 
@@ -103,17 +182,9 @@ export function StockProductsPage({ locale, canManage }: { locale: Locale; canMa
           <AlertCircle className="h-4 w-4" /> {error}
         </div>
       ) : null}
-      {created ? (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700" role="status">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="flex items-center gap-2">
-              <Check className="h-4 w-4" />
-              {L(locale, "تمت إضافة المنتج:", "Product added:")} {locale === "ar" ? created.nameAr : created.nameEn}
-            </span>
-            <Link className="btn btn-primary text-xs" href={`/inventory?ingredient=${encodeURIComponent(created.id)}`}>
-              {L(locale, "إضافة للمخزون", "Add to stock")}
-            </Link>
-          </div>
+      {notice ? (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700" role="status">
+          <Check className="h-4 w-4" /> {notice}
         </div>
       ) : null}
 
@@ -126,34 +197,15 @@ export function StockProductsPage({ locale, canManage }: { locale: Locale; canMa
             {L(locale, "ليست لديك صلاحية إضافة المنتجات.", "You do not have permission to add products.")}
           </p>
         ) : null}
-        <form className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(event) => void submit(event)}>
+        <form className="mt-4 grid gap-3 sm:grid-cols-3" onSubmit={(event) => void submit(event)}>
           <label className="block text-xs font-medium">
-            {L(locale, "اسم المنتج (عربي) *", "Product name (Arabic) *")}
+            {L(locale, "اسم المنتج *", "Product name *")}
             <input
               className="input mt-1"
               maxLength={120}
               onChange={(event) => setNameAr(event.target.value)}
               required
               value={nameAr}
-            />
-          </label>
-          <label className="block text-xs font-medium">
-            {L(locale, "الاسم (إنجليزي)", "Name (English)")}
-            <input
-              className="input mt-1"
-              maxLength={120}
-              onChange={(event) => setNameEn(event.target.value)}
-              value={nameEn}
-            />
-          </label>
-          <label className="block text-xs font-medium">
-            {L(locale, "رمز المنتج (اختياري)", "Product code (optional)")}
-            <input
-              className="input mt-1"
-              maxLength={60}
-              onChange={(event) => setSku(event.target.value)}
-              placeholder={L(locale, "يُولَّد تلقائياً", "Generated automatically")}
-              value={sku}
             />
           </label>
           <label className="block text-xs font-medium">
@@ -167,28 +219,18 @@ export function StockProductsPage({ locale, canManage }: { locale: Locale; canMa
             </select>
           </label>
           <label className="block text-xs font-medium">
-            {L(locale, "التكلفة الحالية", "Current cost")}
+            {L(locale, "السعر", "Price")}
             <input
               className="input mt-1"
               min="0"
               onChange={(event) => setCurrentCost(event.target.value)}
+              placeholder="0"
               step="any"
               type="number"
               value={currentCost}
             />
           </label>
-          <label className="block text-xs font-medium">
-            {L(locale, "الحد الأدنى للمخزون", "Minimum stock")}
-            <input
-              className="input mt-1"
-              min="0"
-              onChange={(event) => setMinStock(event.target.value)}
-              step="any"
-              type="number"
-              value={minStock}
-            />
-          </label>
-          <div className="sm:col-span-2 lg:col-span-3">
+          <div className="sm:col-span-3">
             <button className="btn btn-primary" disabled={!canManage || saving || loading} type="submit">
               <PackagePlus className="h-4 w-4" />
               {saving ? L(locale, "جارٍ الإضافة...", "Adding...") : L(locale, "إضافة المنتج", "Add product")}
@@ -214,34 +256,129 @@ export function StockProductsPage({ locale, canManage }: { locale: Locale; canMa
               <article className="card flex flex-col gap-2 p-4" key={item.id}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">
-                      {locale === "ar" ? item.nameAr : item.nameEn}
-                    </div>
+                    <div className="truncate text-sm font-semibold">{productName(item)}</div>
                     <div className="muted truncate text-[11px]">{item.sku}</div>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] ${item.active
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-amber-100 text-amber-700"}`}
-                  >
-                    {item.active ? L(locale, "نشط", "Active") : L(locale, "غير نشط", "Inactive")}
+                  <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                    {L(locale, "نشط", "Active")}
                   </span>
                 </div>
-                <div className="mt-auto flex items-center justify-between border-t border-[var(--border)] pt-2 text-[11px]">
-                  <span className="muted">
-                    {L(locale, "التكلفة", "Cost")}: {formatNumber(item.currentCost, locale)}
-                  </span>
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="muted truncate">{unitName(item.baseUnitId)}</span>
+                  <span className="font-semibold tabular-nums">{formatNumber(item.currentCost, locale)}</span>
+                </div>
+                <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2">
                   <Link
-                    className="text-[var(--primary)] hover:underline"
+                    className="text-[11px] text-[var(--primary)] hover:underline"
                     href={`/inventory?ingredient=${encodeURIComponent(item.id)}`}
                   >
                     {L(locale, "إضافة للمخزون", "Add to stock")}
                   </Link>
+                  <span className="flex shrink-0 gap-1">
+                    <button
+                      className="btn text-[11px]"
+                      disabled={deletingId === item.id}
+                      onClick={() => openEdit(item)}
+                      type="button"
+                    >
+                      <Pencil className="h-3 w-3" /> {L(locale, "تعديل", "Edit")}
+                    </button>
+                    <button
+                      className="btn btn-danger text-[11px]"
+                      disabled={deletingId === item.id}
+                      onClick={() => void remove(item)}
+                      type="button"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      {deletingId === item.id ? L(locale, "...", "...") : L(locale, "حذف", "Delete")}
+                    </button>
+                  </span>
                 </div>
               </article>
             ))}
           </div>
         )}
       </section>
+
+      {editing ? (
+        <div
+          className="arap-modal-overlay"
+          onMouseDown={(event) => { if (event.target === event.currentTarget && !editBusy) setEditing(null); }}
+        >
+          <form
+            aria-labelledby="stock-edit-title"
+            aria-modal="true"
+            className="arap-modal"
+            dir={locale === "ar" ? "rtl" : "ltr"}
+            onSubmit={(event) => void submitEdit(event)}
+            role="dialog"
+          >
+            <div className="arap-modal-header">
+              <h2 className="arap-modal-title" id="stock-edit-title">
+                {L(locale, "تعديل المنتج", "Edit product")}
+              </h2>
+              <button
+                aria-label={L(locale, "إغلاق", "Close")}
+                className="arap-modal-close"
+                disabled={editBusy}
+                onClick={() => setEditing(null)}
+                type="button"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="arap-modal-body scroll-thin">
+              {editError ? <p className="arap-modal-error">{editError}</p> : null}
+              <label className="arap-modal-field" htmlFor="stock-edit-name">
+                <span className="arap-modal-label">{L(locale, "اسم المنتج", "Product name")}</span>
+                <input
+                  autoFocus
+                  className="arap-modal-input"
+                  id="stock-edit-name"
+                  maxLength={120}
+                  onChange={(event) => setEditNameAr(event.target.value)}
+                  value={editNameAr}
+                />
+              </label>
+              <label className="arap-modal-field" htmlFor="stock-edit-unit">
+                <span className="arap-modal-label">{L(locale, "وحدة القياس", "Unit of measure")}</span>
+                <select
+                  className="arap-modal-input"
+                  id="stock-edit-unit"
+                  onChange={(event) => setEditUnitId(event.target.value)}
+                  value={editUnitId}
+                >
+                  {(data?.units ?? []).map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      {locale === "ar" ? unit.nameAr : unit.nameEn} · {unit.code}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="arap-modal-field" htmlFor="stock-edit-price">
+                <span className="arap-modal-label">{L(locale, "السعر", "Price")}</span>
+                <input
+                  className="arap-modal-input"
+                  id="stock-edit-price"
+                  min="0"
+                  onChange={(event) => setEditCost(event.target.value)}
+                  step="any"
+                  type="number"
+                  value={editCost}
+                />
+              </label>
+            </div>
+            <div className="arap-modal-footer">
+              <button className="arap-modal-save" disabled={editBusy} type="submit">
+                {editBusy ? L(locale, "جارٍ الحفظ...", "Saving...") : L(locale, "حفظ", "Save")}
+              </button>
+              <button className="arap-modal-cancel" disabled={editBusy} onClick={() => setEditing(null)} type="button">
+                {L(locale, "إلغاء", "Cancel")}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </div>
   );
 }

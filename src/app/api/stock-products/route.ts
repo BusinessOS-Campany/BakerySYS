@@ -8,11 +8,8 @@ import { serialize } from "@/lib/serialize";
 
 const schema = z.object({
   nameAr: z.string().trim().min(1).max(120),
-  nameEn: z.string().trim().max(120).optional(),
-  sku: z.string().trim().max(60).optional(),
   unitId: z.string().optional(),
   currentCost: z.number().min(0).max(1_000_000_000).optional(),
-  minStock: z.number().min(0).max(1_000_000_000).optional(),
 });
 
 /** Raw-material products available to the inventory add-to-stock form. */
@@ -22,12 +19,12 @@ export const GET = apiRoute({
     const tenantId = auth.user.tenantId;
     const [items, units] = await Promise.all([
       db.ingredient.findMany({
-        where: { tenantId },
+        where: { tenantId, active: true },
         select: {
-          id: true, sku: true, nameAr: true, nameEn: true,
+          id: true, sku: true, nameAr: true, nameEn: true, baseUnitId: true,
           currentCost: true, minStock: true, active: true,
         },
-        orderBy: [{ active: "desc" }, { nameAr: "asc" }],
+        orderBy: { nameAr: "asc" },
         take: 300,
       }),
       db.unitOfMeasure.findMany({
@@ -58,22 +55,16 @@ export const POST = apiRoute({
       || units.find((entry) => entry.code === "kg")
       || units[0];
 
-    const sku = input.sku || `ING-${randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
-    const duplicate = await db.ingredient.findFirst({ where: { tenantId, sku }, select: { id: true } });
-    if (duplicate) {
-      throw new AppError("VALIDATION", "Product code already exists", "رمز المنتج مستخدم بالفعل");
-    }
-
+    const sku = `ING-${randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase()}`;
     const product = await db.ingredient.create({
       data: {
         tenantId,
         sku,
         nameAr: input.nameAr,
-        nameEn: input.nameEn || input.nameAr,
+        nameEn: input.nameAr,
         baseUnitId: unit.id,
         purchaseUnitId: unit.id,
         currentCost: round(input.currentCost ?? 0, 6),
-        minStock: round(input.minStock ?? 0, 6),
         active: true,
       },
     });
