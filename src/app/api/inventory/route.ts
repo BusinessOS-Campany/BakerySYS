@@ -40,7 +40,7 @@ export const GET = apiRoute({
     const [ingredients, products, warehouses] = await Promise.all([
       db.ingredient.findMany({
         where: { tenantId: auth.user.tenantId, active: true },
-        select: { id: true, nameAr: true, nameEn: true, sku: true, minStock: true },
+        select: { id: true, nameAr: true, nameEn: true, sku: true, minStock: true, currentCost: true },
       }),
       db.product.findMany({
         where: { tenantId: auth.user.tenantId },

@@ -20,7 +20,7 @@ type IngredientLot = {
   expiryDate: string | null;
 };
 
-type IngredientOption = { id: string; nameAr: string; nameEn: string; sku: string };
+type IngredientOption = { id: string; nameAr: string; nameEn: string; sku: string; currentCost: string | number };
 type WarehouseOption = { id: string; nameAr?: string | null; nameEn?: string | null };
 
 type InventoryPayload = {
@@ -78,6 +78,12 @@ export function InventoryPage({
   const grainsCount = lots.filter((lot) => (lot.itemState ?? "GRAINS") === "GRAINS").length;
   const groundCount = lots.length - grainsCount;
   const cleanedCount = lots.filter((lot) => lot.cleaned).length;
+  const selectedProduct = data?.ingredients.find((item) => item.id === ingredientId);
+  const unitPrice = Number(selectedProduct?.currentCost ?? 0);
+  const enteredQuantity = Number(quantity);
+  const previewTotal = Number.isFinite(enteredQuantity) && enteredQuantity > 0
+    ? unitPrice * enteredQuantity
+    : 0;
 
   function ingredientName(id: string) {
     const item = data?.ingredients.find((entry) => entry.id === id);
@@ -234,6 +240,14 @@ export function InventoryPage({
             {saving ? L(locale, "جارٍ الإضافة...", "Adding...") : L(locale, "إضافة للمخزون", "Add to stock")}
           </button>
         </form>
+        {selectedProduct ? (
+          <p className="muted mt-3 rounded-lg bg-[var(--surface-muted)] px-3 py-2 text-xs">
+            {L(locale, "سعر الوحدة", "Unit price")}: {formatNumber(unitPrice, locale)}
+            <span className="mx-2">·</span>
+            {L(locale, "الإجمالي", "Total")}:{" "}
+            <strong className="font-semibold">{formatNumber(previewTotal, locale)}</strong>
+          </p>
+        ) : null}
       </section>
 
       <section>
@@ -251,6 +265,7 @@ export function InventoryPage({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {lots.map((lot) => {
               const isGround = (lot.itemState ?? "GRAINS") === "GROUND";
+              const lineValue = Number(lot.quantity) * Number(lot.unitCost);
               return (
                 <article className="card flex flex-col gap-3 p-4" key={lot.id}>
                   <div className="flex items-start justify-between gap-2">
@@ -274,8 +289,13 @@ export function InventoryPage({
                       <div className="mt-0.5 text-xl font-bold tabular-nums">{formatNumber(lot.quantity, locale)}</div>
                     </div>
                     <div className="text-end">
-                      <div className="muted text-[11px]">{L(locale, "التكلفة", "Cost")}</div>
-                      <div className="mt-0.5 text-xs tabular-nums">{formatNumber(lot.unitCost, locale)}</div>
+                      <div className="muted text-[11px]">{L(locale, "القيمة", "Value")}</div>
+                      <div className="mt-0.5 text-xl font-bold tabular-nums text-[var(--primary)]">
+                        {formatNumber(lineValue, locale)}
+                      </div>
+                      <div className="muted text-[10px] tabular-nums">
+                        {L(locale, "سعر الوحدة", "Unit price")}: {formatNumber(lot.unitCost, locale)}
+                      </div>
                     </div>
                   </div>
 
