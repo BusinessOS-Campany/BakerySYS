@@ -17,8 +17,6 @@ export async function createPurchaseOrder(tx: Db, input: {
   createdById: string;
   items: { ingredientId: string; quantity: number; unitId: string; unitPrice: number }[];
 }) {
-  const supplier = await tx.supplier.findFirst({ where: { id: input.supplierId, tenantId: input.tenantId } });
-  if (!supplier) throw new AppError("NOT_FOUND", "Supplier not found", "المورد غير موجود");
   if (!input.items.length) throw new AppError("VALIDATION", "Order has no items", "الطلب لا يحتوي على بنود");
   const ingredientIds = [...new Set(input.items.map((i) => i.ingredientId))];
   const ingredients = await tx.ingredient.findMany({ where: { id: { in: ingredientIds }, tenantId: input.tenantId } });
@@ -156,9 +154,6 @@ export async function receiveGoods(tx: Db, input: {
       { code: ACCOUNT_CODES.PAYABLES, debit: 0, credit: total },
     ],
   });
-  await tx.supplier.update({
-    where: { id: input.supplierId }, data: { balance: { increment: total } },
-  });
   await notify(tx, {
     tenantId: input.tenantId,
     titleAr: "تم استلام بضاعة", titleEn: "Goods received",
@@ -178,8 +173,6 @@ export async function paySupplier(tx: Db, input: {
   paidAt?: Date;
   recordedBy: string;
 }) {
-  const supplier = await tx.supplier.findFirst({ where: { id: input.supplierId, tenantId: input.tenantId } });
-  if (!supplier) throw new AppError("NOT_FOUND", "Supplier not found", "المورد غير موجود");
   const amount = round(input.amount, 6);
   if (amount <= 0) throw new AppError("VALIDATION", "Payment must be positive", "المبلغ يجب أن يكون موجباً");
   const payment = await tx.supplierPayment.create({
@@ -188,9 +181,6 @@ export async function paySupplier(tx: Db, input: {
       amount, method: input.method ?? "CASH", reference: input.reference ?? null,
       paidAt: input.paidAt ?? new Date(), recordedBy: input.recordedBy,
     },
-  });
-  await tx.supplier.update({
-    where: { id: input.supplierId }, data: { balance: { decrement: amount } },
   });
   if (input.invoiceId) {
     const invoice = await tx.supplierInvoice.findFirst({

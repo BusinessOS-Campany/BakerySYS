@@ -255,28 +255,6 @@ model Category {
   @@map("categories")
 }
 
-model Supplier {
-  id                String   @id @default(cuid())
-  tenantId          String
-  code              String
-  nameAr            String
-  nameEn            String
-  contactName       String?
-  phone             String?
-  email             String?
-  address           String?
-  taxNumber         String?
-  paymentTermsDays  Int      @default(0)
-  balance           Decimal  @default(0) @db.Decimal(18, 4)
-  active            Boolean  @default(true)
-  notes             String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  @@unique([tenantId, code])
-  @@index([tenantId])
-  @@map("suppliers")
-}
-
 model Ingredient {
   id                 String   @id @default(cuid())
   tenantId           String
@@ -290,7 +268,6 @@ model Ingredient {
   currentCost        Decimal  @default(0) @db.Decimal(18, 4)
   minStock           Decimal  @default(0) @db.Decimal(18, 4)
   maxStock           Decimal  @default(0) @db.Decimal(18, 4)
-  preferredSupplierId String?
   storageRequirement String?
   trackExpiry        Boolean  @default(false)
   imageUrl           String?
@@ -300,21 +277,6 @@ model Ingredient {
   @@unique([tenantId, sku])
   @@index([tenantId, categoryId])
   @@map("ingredients")
-}
-
-model IngredientSupplier {
-  id           String   @id @default(cuid())
-  tenantId     String
-  ingredientId String
-  supplierId   String
-  supplierSku  String?
-  lastPrice    Decimal  @default(0) @db.Decimal(18, 4)
-  leadTimeDays Int      @default(0)
-  isPreferred  Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  @@unique([ingredientId, supplierId])
-  @@map("ingredient_suppliers")
 }
 
 model PriceHistory {

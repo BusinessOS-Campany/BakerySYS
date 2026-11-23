@@ -20,26 +20,19 @@ export const GET = apiRoute({
       }),
       db.goodsReceipt.count({ where }),
     ]);
-    const [lines, suppliers, payables] = await Promise.all([
+    const [lines, payables] = await Promise.all([
       db.goodsReceiptItem.findMany({
         where: { tenantId: auth.user.tenantId, receiptId: { in: receipts.map((r) => r.id) } },
-      }),
-      db.supplier.findMany({
-        where: { tenantId: auth.user.tenantId, id: { in: [...new Set(receipts.map((r) => r.supplierId))] } },
-        select: { id: true, nameAr: true, nameEn: true },
       }),
       db.supplierPayable.findMany({
         where: { tenantId: auth.user.tenantId, sourceType: "GOODS_RECEIPT", sourceId: { in: receipts.map((r) => r.id) } },
       }),
     ]);
-    const supplierMap = new Map(suppliers.map((s) => [s.id, s]));
     const items = receipts.map((receipt) => ({
       ...receipt,
       lines: lines.filter((l) => l.receiptId === receipt.id),
       payable: payables.find((p) => p.sourceId === receipt.id) ?? null,
-      supplierName: auth.locale === "ar"
-        ? supplierMap.get(receipt.supplierId)?.nameAr ?? receipt.supplierId
-        : supplierMap.get(receipt.supplierId)?.nameEn ?? receipt.supplierId,
+      supplierName: receipt.supplierId,
     }));
     return serialize({ items, total, page, pageSize });
   },

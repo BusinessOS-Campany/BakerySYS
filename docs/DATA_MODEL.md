@@ -10,7 +10,7 @@ The authoritative schema is `prisma/schema.prisma`. Referential integrity constr
 
 ### Master data
 
-`Product`, `Ingredient`, `Category`, `UnitOfMeasure`, `Supplier`, `Customer`, `Employee`, `Warehouse`, `Account`, `ExpenseCategory`. Products and ingredients store bilingual names, SKUs, minimum stock and costing fields.
+`Product`, `Ingredient`, `Category`, `UnitOfMeasure`, `Customer`, `Employee`, `Warehouse`, `Account`, `ExpenseCategory`. Products and ingredients store bilingual names, SKUs, minimum stock and costing fields.
 
 ### Purchasing
 

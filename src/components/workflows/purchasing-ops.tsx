@@ -33,8 +33,7 @@ export function PurchasesPage({ locale, canManage, canApprove }: { locale: Local
   const [refresh, setRefresh] = useState(0);
   const orders = useList<PurchaseOrderRow>("/api/purchasing/orders?pageSize=100", undefined, locale, refresh);
   const receipts = useList<ReceiptRow>("/api/purchasing/receipts?pageSize=100", undefined, locale, refresh);
-  const lookups = useLookups(["suppliers", "warehouses", "ingredients", "units"], locale);
-  const supplierOptions = lookupOptions(lookups.suppliers ?? [], locale);
+  const lookups = useLookups(["warehouses", "ingredients", "units"], locale);
   const warehouseOptions = lookupOptions(lookups.warehouses ?? [], locale);
   const ingredientOptions = lookupOptions(lookups.ingredients ?? [], locale);
   const unitOptions = lookupOptions(lookups.units ?? [], locale);
@@ -51,7 +50,7 @@ export function PurchasesPage({ locale, canManage, canApprove }: { locale: Local
       <div>
         <h1 className="text-2xl font-bold">{L(locale, "المشتريات", "Purchasing")}</h1>
         <p className="muted mt-1 text-sm">
-          {L(locale, "أوامر الشراء، الاستلام، الدفعات، وأرصدة الموردين", "Purchase orders, receiving, payments and supplier balances")}
+          {L(locale, "أوامر الشراء، الاستلام، الدفعات، والمستحقات", "Purchase orders, receiving, payments and payables")}
         </p>
       </div>
 
@@ -66,7 +65,7 @@ export function PurchasesPage({ locale, canManage, canApprove }: { locale: Local
         canManage={canManage}
         columns={[
           { key: "orderNumber", label: L(locale, "رقم الأمر", "Order") },
-          { key: "supplierName", label: L(locale, "المورد", "Supplier") },
+          { key: "supplierName", label: L(locale, "الجهة", "Vendor") },
           { key: "expectedDate", label: L(locale, "المتوقع", "Expected"), render: (row) => row.expectedDate ? new Date(row.expectedDate).toLocaleDateString(numericLocale(locale)) : "—" },
           { key: "total", label: L(locale, "الإجمالي", "Total") },
           { key: "status", label: L(locale, "الحالة", "Status"), render: (row) => statusBadge(row.status, locale) },
@@ -84,7 +83,7 @@ export function PurchasesPage({ locale, canManage, canApprove }: { locale: Local
             notes: row.notes ?? "",
           }),
           fields: [
-            { name: "supplierId", label: L(locale, "المورد", "Supplier"), type: "select", required: true, options: supplierOptions },
+            { name: "supplierId", label: L(locale, "اسم الجهة", "Vendor name"), type: "text", required: true },
             { name: "warehouseId", label: L(locale, "مخزن الاستلام", "Receiving warehouse"), type: "select", required: true, options: warehouseOptions },
             { name: "expectedDate", label: L(locale, "تاريخ الاستلام المتوقع", "Expected date"), type: "date" },
             { name: "notes", label: L(locale, "ملاحظات", "Notes"), type: "textarea" },
@@ -158,7 +157,7 @@ export function PurchasesPage({ locale, canManage, canApprove }: { locale: Local
         canManage={canManage}
         columns={[
           { key: "receiptNumber", label: L(locale, "رقم الإيصال", "Receipt") },
-          { key: "supplierName", label: L(locale, "المورد", "Supplier") },
+          { key: "supplierName", label: L(locale, "الجهة", "Vendor") },
           { key: "receivedAt", label: L(locale, "التاريخ", "Date"), render: (row) => new Date(row.receivedAt).toLocaleDateString(numericLocale(locale)) },
           { key: "total", label: L(locale, "القيمة", "Value") },
           { key: "payable", label: L(locale, "المستحق", "Payable"), render: (row) => row.payable ? `${Number(row.payable.amount) - Number(row.payable.settled)}` : "—" },
@@ -170,7 +169,7 @@ export function PurchasesPage({ locale, canManage, canApprove }: { locale: Local
           enabled: canManage,
           fields: [
             { name: "orderId", label: L(locale, "أمر الشراء", "Purchase order"), type: "select", options: orders.rows.map((order) => ({ value: order.id, label: `${order.orderNumber} · ${order.supplierName}` })) },
-            { name: "supplierId", label: L(locale, "المورد", "Supplier"), type: "select", required: true, options: supplierOptions },
+            { name: "supplierId", label: L(locale, "اسم الجهة", "Vendor name"), type: "text", required: true },
             { name: "warehouseId", label: L(locale, "مخزن الاستلام", "Receiving warehouse"), type: "select", required: true, options: warehouseOptions },
             { name: "receivedAt", label: L(locale, "تاريخ الاستلام", "Received at"), type: "datetime" },
             { name: "inspectionNote", label: L(locale, "ملاحظة الفحص", "Inspection note"), type: "textarea" },
@@ -209,7 +208,7 @@ export function PurchasesPage({ locale, canManage, canApprove }: { locale: Local
 
       {canManage ? (
         <ActionForm
-          title={L(locale, "سداد مورد", "Pay supplier")}
+          title={L(locale, "سداد جهة", "Pay vendor")}
           description={L(locale, "يتم تخفيض الرصيد المستحق للإيصال وتسجيل الدفعة في اليومية.", "The receipt payable is reduced and the payment is journalised.")}
           fields={[
             { name: "receiptId", label: L(locale, "الإيصال", "Receipt"), type: "select", required: true, options: receipts.rows.map((receipt) => ({ value: receipt.id, label: `${receipt.receiptNumber} · ${receipt.supplierName}` })) },

@@ -37,7 +37,6 @@ export const NAV_SECTIONS: NavSection[] = [
     titleKey: "shell.section.purchasing",
     items: [
       { href: "/purchases", labelKey: "nav.purchases", icon: "ClipboardList", permission: "purchases.view" },
-      { href: "/suppliers", labelKey: "nav.suppliers", icon: "Truck", permission: "purchases.view" },
     ],
   },
   {

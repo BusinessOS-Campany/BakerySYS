@@ -1,6 +1,6 @@
 # BakerySYS
 
-Production-oriented bakery management system built with Next.js 16, React 19, TypeScript, PostgreSQL and Prisma 7. It covers the operating cycle from purchasing and inventory through recipes, POS sales, supplier/customer balances, accounting and analytics.
+Production-oriented bakery management system built with Next.js 16, React 19, TypeScript, PostgreSQL and Prisma 7. It covers the operating cycle from purchasing and inventory through recipes, POS sales, customer balances, accounting and analytics.
 
 The interface is bilingual (Arabic RTL / English LTR), permission-aware, and contains no hardcoded dashboard data — every number comes from PostgreSQL.
 
@@ -77,10 +77,10 @@ Demo tenant: `golden-crust`. The seeded cash session is intentionally left `OPEN
 | Dashboard | `/` | Live KPIs, 14-day sales chart, low-stock alerts, quick actions |
 | POS | `/pos` | Product search, cart, payments, offline queue, cash-session aware; cash disbursement (صرف الصندوق) from an open register |
 | Sales | `/sales` | Invoice register, invoice detail, sales returns with reversing journals |
-| Products/master data | `/products`, `/ingredients`, `/categories`, `/units`, `/customers`, `/suppliers`, `/warehouses`, `/branches`, `/accounts`, `/employees`, `/expense-categories` | Generic, permission-gated CRUD |
+| Products/master data | `/products`, `/ingredients`, `/categories`, `/units`, `/customers`, `/warehouses`, `/branches`, `/accounts`, `/employees`, `/expense-categories` | Generic, permission-gated CRUD |
 | Recipes | `/recipes` | Ingredient lines, costing snapshots, recalculation, new versions |
 | Inventory | `/inventory` | Stock balances, FEFO lots, adjustments, counts, transfers, ledger |
-| Purchasing | `/purchases` | Purchase orders, approvals, goods receipts, supplier payments |
+| Purchasing | `/purchases` | Purchase orders, approvals, goods receipts, vendor payments |
 | Accounting | `/accounting` | Manual journals, chart of accounts, compensating reversals |
 | Expenses | `/expenses` | Expense posting and voiding |
 | Reports | `/reports` | P&L metrics, product sales, trial balance, CSV export |
@@ -107,7 +107,7 @@ src/
 │   ├── inventory/             # FEFO stock movements, counts, transfers
 │   ├── notifications/         # Low-stock alerts
 │   ├── offline/               # Dexie offline queue
-│   ├── purchasing/            # Orders, receipts, supplier payments
+│   ├── purchasing/            # Orders, receipts, vendor payments
 │   ├── recipes/               # Recipe versions and costing
 │   ├── reports/               # Report aggregation
 │   ├── sales/                 # Sales, refunds, cash reconciliation

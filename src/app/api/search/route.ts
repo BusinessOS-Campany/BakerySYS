@@ -81,29 +81,6 @@ export const GET = apiRoute<unknown, SearchPayload>({
       })));
     }
 
-    if (can("purchases.view")) {
-      tasks.push(db.supplier.findMany({
-        where: {
-          tenantId,
-          OR: [
-            { code: contains(q) }, { nameAr: contains(q) }, { nameEn: contains(q) },
-            { contactName: contains(q) }, { phone: contains(q) }, { email: contains(q) },
-          ],
-        },
-        select: { id: true, code: true, nameAr: true, nameEn: true, contactName: true, phone: true },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      }).then((rows): SearchGroup => ({
-        groupKey: "nav.suppliers",
-        results: rows.map((row): SearchResult => ({
-          id: row.id,
-          label: ar ? row.nameAr : row.nameEn,
-          subtitle: row.phone || row.contactName || row.code,
-          href: href("/suppliers", q),
-        })),
-      })));
-    }
-
     if (can("sales.view")) {
       tasks.push(db.sale.findMany({
         where: {

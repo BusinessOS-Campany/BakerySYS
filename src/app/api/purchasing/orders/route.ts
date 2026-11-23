@@ -23,22 +23,13 @@ export const GET = apiRoute({
       }),
       db.purchaseOrder.count({ where }),
     ]);
-    const [lines, suppliers] = await Promise.all([
-      db.purchaseOrderItem.findMany({
-        where: { tenantId: auth.user.tenantId, orderId: { in: orders.map((o) => o.id) } },
-      }),
-      db.supplier.findMany({
-        where: { tenantId: auth.user.tenantId, id: { in: [...new Set(orders.map((o) => o.supplierId))] } },
-        select: { id: true, nameAr: true, nameEn: true },
-      }),
-    ]);
-    const supplierMap = new Map(suppliers.map((s) => [s.id, s]));
+    const lines = await db.purchaseOrderItem.findMany({
+      where: { tenantId: auth.user.tenantId, orderId: { in: orders.map((o) => o.id) } },
+    });
     const items = orders.map((order) => ({
       ...order,
       lines: lines.filter((l) => l.orderId === order.id),
-      supplierName: auth.locale === "ar"
-        ? supplierMap.get(order.supplierId)?.nameAr ?? order.supplierId
-        : supplierMap.get(order.supplierId)?.nameEn ?? order.supplierId,
+      supplierName: order.supplierId,
     }));
     return serialize({ items, total, page, pageSize });
   },

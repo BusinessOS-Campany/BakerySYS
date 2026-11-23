@@ -182,53 +182,31 @@ async function main() {
     categories.set(code, cat.id);
   }
 
-  // Suppliers
-  const suppliers = new Map<string, string>();
-  for (const [code, nameEn, nameAr, phone] of [
-    ["SUP1", "Al-Nahrain Foods", "مؤسسة النهرين للأغذية", "+967 1 200 000"],
-    ["SUP2", "Sana'a Dairy Co.", "شركة صنعاء للألبان", "+967 1 300 000"],
-  ] as const) {
-    const supplier = await db.supplier.create({
-      data: {
-        tenantId: tid, code, nameEn, nameAr, phone, contactName: nameEn,
-        email: `${code.toLowerCase()}@example.demo`, paymentTermsDays: 30,
-      },
-    });
-    suppliers.set(code, supplier.id);
-  }
-
   // Ingredients — currentCost is always PER BASE UNIT
   const ingredients = new Map<string, string>();
   const ingredientData = [
-    ["FLOUR", "Wheat Flour", "دقيق القمح", "FLOUR", "g", "kg", 0.25, 20000, 2000, true, "SUP1"],
-    ["SUGAR", "Sugar", "السكر", "SWEET", "g", "kg", 0.20, 15000, 2000, false, "SUP1"],
-    ["YEAST", "Instant Yeast", "الخميرة الفورية", "FLOUR", "g", "kg", 1.20, 1200, 200, true, "SUP1"],
-    ["SALT", "Salt", "الملح", "FLOUR", "g", "kg", 0.05, 4000, 500, false, "SUP1"],
-    ["EGGS", "Eggs", "البيض", "DAIRY", "pcs", "pcs", 45, 600, 60, true, "SUP2"],
-    ["BUTTER", "Butter", "الزبدة", "DAIRY", "g", "kg", 1.10, 6000, 500, true, "SUP2"],
-    ["MILK", "Milk", "الحليب", "DAIRY", "ml", "L", 0.35, 15000, 1000, true, "SUP2"],
-    ["COCOA", "Cocoa Powder", "الكاكاو", "SWEET", "g", "kg", 1.80, 3000, 300, false, "SUP1"],
-    ["CHOCH", "Chocolate", "الشوكولاتة", "SWEET", "g", "kg", 2.20, 3000, 300, true, "SUP1"],
-    ["OIL", "Vegetable Oil", "الزيت النباتي", "SWEET", "ml", "L", 0.40, 8000, 1000, false, "SUP1"],
-    ["BOX", "Cake Box", "علبة كيك", "PACK", "pcs", "box", 30, 500, 50, false, "SUP1"],
+    ["FLOUR", "Wheat Flour", "دقيق القمح", "FLOUR", "g", "kg", 0.25, 20000, 2000, true],
+    ["SUGAR", "Sugar", "السكر", "SWEET", "g", "kg", 0.20, 15000, 2000, false],
+    ["YEAST", "Instant Yeast", "الخميرة الفورية", "FLOUR", "g", "kg", 1.20, 1200, 200, true],
+    ["SALT", "Salt", "الملح", "FLOUR", "g", "kg", 0.05, 4000, 500, false],
+    ["EGGS", "Eggs", "البيض", "DAIRY", "pcs", "pcs", 45, 600, 60, true],
+    ["BUTTER", "Butter", "الزبدة", "DAIRY", "g", "kg", 1.10, 6000, 500, true],
+    ["MILK", "Milk", "الحليب", "DAIRY", "ml", "L", 0.35, 15000, 1000, true],
+    ["COCOA", "Cocoa Powder", "الكاكاو", "SWEET", "g", "kg", 1.80, 3000, 300, false],
+    ["CHOCH", "Chocolate", "الشوكولاتة", "SWEET", "g", "kg", 2.20, 3000, 300, true],
+    ["OIL", "Vegetable Oil", "الزيت النباتي", "SWEET", "ml", "L", 0.40, 8000, 1000, false],
+    ["BOX", "Cake Box", "علبة كيك", "PACK", "pcs", "box", 30, 500, 50, false],
   ] as const;
-  for (const [code, nameEn, nameAr, cat, base, purchase, cost, stock, minimum, expiry, supplier] of ingredientData) {
+  for (const [code, nameEn, nameAr, cat, base, purchase, cost, stock, minimum, expiry] of ingredientData) {
     const ingredient = await db.ingredient.create({
       data: {
         tenantId: tid, sku: `ING-${code}`, nameEn, nameAr,
         categoryId: categories.get(cat)!, baseUnitId: units.get(base)!,
         purchaseUnitId: units.get(purchase)!, conversionFactor: 1, currentCost: cost,
-        minStock: minimum, maxStock: minimum * 10,
-        preferredSupplierId: suppliers.get(supplier), trackExpiry: expiry,
+        minStock: minimum, maxStock: minimum * 10, trackExpiry: expiry,
       },
     });
     ingredients.set(code, ingredient.id);
-    await db.ingredientSupplier.create({
-      data: {
-        tenantId: tid, ingredientId: ingredient.id, supplierId: suppliers.get(supplier)!,
-        lastPrice: cost, isPreferred: true, leadTimeDays: 3,
-      },
-    });
   }
 
   // Products and recipes
@@ -342,7 +320,7 @@ async function main() {
       await receiveIngredient(tx, {
         tenantId: tid, warehouseId: whRaw.id, ingredientId: ingredients.get(code)!,
         quantity: stock, unitCost: ingredientData.find((i) => i[0] === code)![6],
-        lotNumber: `OPEN-${code}`, supplierId: suppliers.get("SUP1"),
+        lotNumber: `OPEN-${code}`, supplierId: "Al-Nahrain Foods",
         expiryDate: new Date(Date.now() + 180 * 86_400_000),
         movementType: "PURCHASE_RECEIPT", note: "Opening stock", createdById: users.get("STOREKEEPER"),
       });
@@ -374,7 +352,7 @@ async function main() {
 
   await db.$transaction(async (tx) => {
     const po = await createPurchaseOrder(tx, {
-      tenantId: tid, supplierId: suppliers.get("SUP1")!, warehouseId: whRaw.id,
+      tenantId: tid, supplierId: "Al-Nahrain Foods", warehouseId: whRaw.id,
       branchId: branchMain.id, expectedDate: new Date(Date.now() + 5 * 86_400_000),
       createdById: users.get("STOREKEEPER")!,
       items: [
@@ -385,7 +363,7 @@ async function main() {
     await approvePurchaseOrder(tx, { tenantId: tid, orderId: po.id, approvedById: users.get("OWNER")! });
     const poItems = await tx.purchaseOrderItem.findMany({ where: { orderId: po.id } });
     await receiveGoods(tx, {
-      tenantId: tid, orderId: po.id, supplierId: suppliers.get("SUP1")!, warehouseId: whRaw.id,
+      tenantId: tid, orderId: po.id, supplierId: "Al-Nahrain Foods", warehouseId: whRaw.id,
       receivedById: users.get("STOREKEEPER")!,
       items: poItems.map((item) => ({
         orderItemId: item.id, ingredientId: item.ingredientId,
@@ -484,7 +462,7 @@ async function main() {
         data: {
           tenantId: tid, branchId: branchMain.id, categoryId: categoryRow.id,
           accountId: accounts.get(ACCOUNT_CODES.OPERATING_EXPENSE), number,
-          expenseDate: new Date(), amount, vendor: "Local supplier",
+          expenseDate: new Date(), amount, vendor: "Local vendor",
           description: `${nameEn} / ${nameAr}`, method: "CASH",
           recordedBy: users.get("ACCOUNTANT")!,
         },
