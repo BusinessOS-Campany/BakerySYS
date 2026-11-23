@@ -113,8 +113,8 @@ export default async function DashboardPage() {
   const receivablesValue = receivables.reduce((sum, r) => sum + Number(r.amount) - Number(r.settled), 0);
 
   const kpis = [
-    { key: "dashboard.revenue", value: money(todayRevenue), sub: `${t("common.week")}: ${money(weekRevenue)}`, href: "/sales", icon: ReceiptText, tone: "text-[var(--primary)]" },
-    { key: "dashboard.transactions", value: formatNumber(todaySales._count._all, locale, 0), sub: t("common.today"), href: "/sales", icon: TrendingUp, tone: "text-emerald-500" },
+    { key: "dashboard.revenue", value: money(todayRevenue), sub: `${t("common.week")}: ${money(weekRevenue)}`, href: "/pos", icon: ReceiptText, tone: "text-[var(--primary)]" },
+    { key: "dashboard.transactions", value: formatNumber(todaySales._count._all, locale, 0), sub: t("common.today"), href: "/pos", icon: TrendingUp, tone: "text-emerald-500" },
     { key: "dashboard.grossProfit", value: money(sum(todaySales._sum.profit)), sub: `${yesterdayDelta >= 0 ? "+" : ""}${yesterdayDelta}%`, href: "/reports", icon: Croissant, tone: "text-emerald-500" },
     { key: "dashboard.expenses", value: money(expenses), sub: t("common.month"), href: "/expenses", icon: Wallet, tone: "text-[var(--danger)]" },
     { key: "dashboard.rawStock", value: money(rawValue), sub: t("nav.ingredients"), href: "/inventory", icon: Boxes, tone: "text-violet-500" },

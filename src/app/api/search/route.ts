@@ -81,27 +81,6 @@ export const GET = apiRoute<unknown, SearchPayload>({
       })));
     }
 
-    if (can("sales.view")) {
-      tasks.push(db.sale.findMany({
-        where: {
-          tenantId,
-          ...(auth.branchId ? { branchId: auth.branchId } : {}),
-          OR: [{ invoiceNumber: contains(q) }, { notes: contains(q) }, { idempotencyKey: contains(q) }],
-        },
-        select: { id: true, invoiceNumber: true, invoiceDate: true, notes: true },
-        orderBy: { invoiceDate: "desc" },
-        take: 5,
-      }).then((rows): SearchGroup => ({
-        groupKey: "nav.sales",
-        results: rows.map((row): SearchResult => ({
-          id: row.id,
-          label: row.invoiceNumber,
-          subtitle: row.notes || row.invoiceDate.toLocaleDateString(numericLocale(auth.locale)),
-          href: href("/sales", q),
-        })),
-      })));
-    }
-
     if (can("users.manage")) {
       tasks.push(db.user.findMany({
         where: {
