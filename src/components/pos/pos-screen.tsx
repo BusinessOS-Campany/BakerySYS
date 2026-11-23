@@ -105,6 +105,11 @@ export function PosScreen({
   const [cashOutReason, setCashOutReason] = useState("");
   const [cashOutError, setCashOutError] = useState("");
   const [cashOutBusy, setCashOutBusy] = useState(false);
+  const [editingCashOut, setEditingCashOut] = useState<CashMovement | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editReason, setEditReason] = useState("");
+  const [editError, setEditError] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
   const [summary, setSummary] = useState<SessionSummary | null>(data.summary);
   const [editingSaleId, setEditingSaleId] = useState("");
@@ -396,6 +401,66 @@ export function PosScreen({
     }
   }
 
+  function openEditCashOut(movement: CashMovement) {
+    setEditingCashOut(movement);
+    setEditAmount(String(Number(movement.amount)));
+    setEditReason(movement.reason ?? "");
+    setEditError("");
+    setError("");
+  }
+
+  async function submitEditCashOut() {
+    if (!editingCashOut) return;
+    setEditError("");
+    const amount = Number(editAmount);
+    if (!Number.isFinite(amount) || amount <= 0) { setEditError(t("pos.cashOutInvalidAmount")); return; }
+    setEditBusy(true);
+    try {
+      const response = await fetch(`/api/cash-movements/${editingCashOut.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount, reason: editReason.trim() || null }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error?.[locale === "ar" ? "messageAr" : "message"] ?? t("common.error"));
+      }
+      setEditingCashOut(null);
+      setMessage(t("pos.cashOutUpdated"));
+      await refreshCashMovements();
+      await refreshSummary();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : t("common.error"));
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  async function deleteCashOut(movement: CashMovement) {
+    const ok = await confirm({
+      title: t("action.delete"),
+      message: t("pos.deleteCashOutConfirm"),
+      confirmLabel: t("action.delete"),
+      tone: "danger",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/cash-movements/${movement.id}`, { method: "DELETE" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error?.[locale === "ar" ? "messageAr" : "message"] ?? t("common.error"));
+      }
+      setMessage(t("pos.cashOutDeleted"));
+      await refreshCashMovements();
+      await refreshSummary();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("common.error"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function voidSale(movement: CashMovement) {
     if (!movement.saleId) return;
     const ok = await confirm({
@@ -655,12 +720,100 @@ export function PosScreen({
                         </span>
                       </div>
                     ) : null}
+                    {movement.kind === "OUT" && !movement.saleId ? (
+                      <div className="mt-2 flex items-center justify-end gap-1 border-t border-[var(--border)] pt-2">
+                        <button
+                          className="btn text-[11px]"
+                          disabled={busy}
+                          onClick={() => openEditCashOut(movement)}
+                          type="button"
+                        >
+                          {t("action.edit")}
+                        </button>
+                        <button
+                          className="btn btn-danger text-[11px]"
+                          disabled={busy}
+                          onClick={() => void deleteCashOut(movement)}
+                          type="button"
+                        >
+                          {t("action.delete")}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
             </div>
           )}
         </section>
+      ) : null}
+
+      {editingCashOut ? (
+        <div
+          className="arap-modal-overlay"
+          onMouseDown={(event) => { if (event.target === event.currentTarget && !editBusy) setEditingCashOut(null); }}
+        >
+          <form
+            aria-labelledby="pos-edit-cashout-title"
+            aria-modal="true"
+            className="arap-modal"
+            dir={locale === "ar" ? "rtl" : "ltr"}
+            onSubmit={(event) => { event.preventDefault(); void submitEditCashOut(); }}
+            role="dialog"
+          >
+            <div className="arap-modal-header">
+              <h2 className="arap-modal-title" id="pos-edit-cashout-title">{t("pos.editCashOutTitle")}</h2>
+              <button
+                aria-label={t("action.close")}
+                className="arap-modal-close"
+                disabled={editBusy}
+                onClick={() => setEditingCashOut(null)}
+                type="button"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="arap-modal-body scroll-thin">
+              {editError ? <p className="arap-modal-error">{editError}</p> : null}
+              <label className="arap-modal-field" htmlFor="pos-edit-cashout-amount">
+                <span className="arap-modal-label">{t("pos.cashOutAmount")}</span>
+                <span className="arap-modal-amount-wrap">
+                  <span aria-hidden="true" className="arap-modal-currency">{currency}</span>
+                  <input
+                    autoFocus
+                    className="arap-modal-input arap-modal-amount"
+                    id="pos-edit-cashout-amount"
+                    inputMode="decimal"
+                    min="0"
+                    onChange={(event) => setEditAmount(event.target.value)}
+                    step="any"
+                    type="number"
+                    value={editAmount}
+                  />
+                </span>
+              </label>
+              <label className="arap-modal-field" htmlFor="pos-edit-cashout-reason">
+                <span className="arap-modal-label">{t("pos.cashOutReason")}</span>
+                <input
+                  className="arap-modal-input"
+                  id="pos-edit-cashout-reason"
+                  maxLength={200}
+                  onChange={(event) => setEditReason(event.target.value)}
+                  placeholder={t("pos.cashOutReasonPlaceholder")}
+                  value={editReason}
+                />
+              </label>
+            </div>
+            <div className="arap-modal-footer">
+              <button className="arap-modal-save" disabled={editBusy} type="submit">
+                {editBusy ? t("common.loading") : t("action.save")}
+              </button>
+              <button className="arap-modal-cancel" disabled={editBusy} onClick={() => setEditingCashOut(null)} type="button">
+                {t("action.cancel")}
+              </button>
+            </div>
+          </form>
+        </div>
       ) : null}
 
       {cashOutOpen ? (
