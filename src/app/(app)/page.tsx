@@ -50,12 +50,12 @@ export default async function DashboardPage() {
 
   const [todaySales, weekSales, monthExpenses, recentSales, lowStock, receivables, ingredientLots, finishedLots] = await Promise.all([
     db.sale.aggregate({
-      where: { tenantId: auth.user.tenantId, ...branchFilter, status: "COMPLETED", invoiceDate: { gte: startToday } },
+      where: { tenantId: auth.user.tenantId, ...branchFilter, status: "COMPLETED", isCredit: false, invoiceDate: { gte: startToday } },
       _sum: { total: true, profit: true, costAmount: true },
       _count: { _all: true },
     }),
     db.sale.aggregate({
-      where: { tenantId: auth.user.tenantId, ...branchFilter, status: "COMPLETED", invoiceDate: { gte: startWeek } },
+      where: { tenantId: auth.user.tenantId, ...branchFilter, status: "COMPLETED", isCredit: false, invoiceDate: { gte: startWeek } },
       _sum: { total: true, profit: true },
     }),
     db.expense.aggregate({
@@ -63,7 +63,7 @@ export default async function DashboardPage() {
       _sum: { amount: true },
     }),
     db.sale.findMany({
-      where: { tenantId: auth.user.tenantId, ...branchFilter, status: "COMPLETED", invoiceDate: { gte: chartStart } },
+      where: { tenantId: auth.user.tenantId, ...branchFilter, status: "COMPLETED", isCredit: false, invoiceDate: { gte: chartStart } },
       select: { invoiceDate: true, total: true, profit: true },
       orderBy: { invoiceDate: "asc" },
     }),

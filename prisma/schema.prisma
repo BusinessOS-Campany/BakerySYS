@@ -835,6 +835,7 @@ model Sale {
   taxAmount      Decimal    @default(0) @db.Decimal(18, 4)
   total          Decimal    @db.Decimal(18, 4)
   paidAmount     Decimal    @default(0) @db.Decimal(18, 4)
+  isCredit       Boolean    @default(false)
   costAmount     Decimal    @default(0) @db.Decimal(18, 4)
   profit         Decimal    @default(0) @db.Decimal(18, 4)
   cashSessionId  String?
@@ -848,6 +849,7 @@ model Sale {
   @@unique([tenantId, idempotencyKey])
   @@index([tenantId, invoiceDate])
   @@index([tenantId, customerId])
+  @@index([tenantId, isCredit, invoiceDate])
   @@map("sales")
 }
 

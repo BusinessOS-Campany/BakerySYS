@@ -8,7 +8,7 @@ export async function getReportData(db: Db, tenantId: string, days: number) {
   const since = new Date(Date.now() - Math.max(days, 1) * 86_400_000);
   const [sales, expenses, ingredientLots, finishedLots, receivableBalances, payableBalances, journalEntries] = await Promise.all([
     db.sale.findMany({
-      where: { tenantId, status: "COMPLETED", invoiceDate: { gte: since } },
+      where: { tenantId, status: "COMPLETED", isCredit: false, invoiceDate: { gte: since } },
       select: { id: true, total: true, profit: true, costAmount: true, taxAmount: true, invoiceDate: true },
     }),
     db.expense.findMany({

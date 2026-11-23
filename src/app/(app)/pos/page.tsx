@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getAuth } from "@/lib/auth/session";
 import { serialize } from "@/lib/serialize";
+import { computeExpectedCash } from "@/lib/calculations";
+import { sessionCashTotals } from "@/lib/sales/service";
 import { PosScreen, type PosData } from "@/components/pos/pos-screen";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +60,25 @@ export default async function PosPage() {
     }),
   ]);
 
+  let summary: {
+    openingBalance: number;
+    expectedCash: number;
+    cashSales: number;
+    cashIn: number;
+    cashOut: number;
+    saleCount: number;
+    cashInCount: number;
+    cashOutCount: number;
+  } | null = null;
+  if (openSession) {
+    const totals = await sessionCashTotals(db, auth, openSession.id);
+    summary = {
+      openingBalance: Number(openSession.openingBalance),
+      expectedCash: computeExpectedCash({ openingBalance: openSession.openingBalance, ...totals }),
+      ...totals,
+    };
+  }
+
   return (
     <PosScreen
       locale={auth.locale}
@@ -68,7 +89,7 @@ export default async function PosPage() {
       defaultBranchId={auth.branchId ?? branches[0]?.id ?? null}
       canOpenSession={auth.permissions.has("pos.open") || auth.roles.includes("OWNER")}
       canCloseSession={canCloseSession}
-      data={serialize({ products, warehouses, branches, customers, registers, openSession }) as unknown as PosData}
+      data={serialize({ products, warehouses, branches, customers, registers, openSession, summary }) as unknown as PosData}
     />
   );
 }

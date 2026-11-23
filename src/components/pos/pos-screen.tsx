@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useDialog } from "@/components/ui/dialog";
 import { enqueueSale, listQueuedSales, removeQueuedSale, updateQueuedSale } from "@/lib/offline/db";
-import { formatMoney, translate, type Locale } from "@/lib/i18n/dictionary";
+import { formatMoney, formatNumber, translate, type Locale } from "@/lib/i18n/dictionary";
 
 type Product = {
   id: string; sku: string; nameAr: string; nameEn: string;
@@ -21,6 +21,17 @@ type Register = { id: string; branchId: string; code: string; nameAr: string; na
 type Session = { id: string; registerId: string; openingBalance: string | number; openedAt: string };
 type CashMovement = { id: string; kind: string; amount: string | number; reason: string | null; createdAt: string };
 
+export type SessionSummary = {
+  openingBalance: number;
+  expectedCash: number;
+  cashSales: number;
+  cashIn: number;
+  cashOut: number;
+  saleCount: number;
+  cashInCount: number;
+  cashOutCount: number;
+};
+
 export type PosData = {
   products: Product[];
   warehouses: Warehouse[];
@@ -28,6 +39,7 @@ export type PosData = {
   customers: Customer[];
   registers: Register[];
   openSession: Session | null;
+  summary: SessionSummary | null;
 };
 
 type PaymentMethod = "CASH" | "BANK_TRANSFER" | "CARD" | "CREDIT";
@@ -56,7 +68,7 @@ export function PosScreen({
   const { prompt } = useDialog();
   const t = (key: string) => translate(locale, key);
   const money = (value: number) => formatMoney(value, locale, currency, decimalPlaces);
-  const [branchId, setBranchId] = useState(defaultBranchId ?? "");
+  const branchId = defaultBranchId ?? "";
   const [warehouseId, setWarehouseId] = useState("");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -78,6 +90,7 @@ export function PosScreen({
   const [cashOutError, setCashOutError] = useState("");
   const [cashOutBusy, setCashOutBusy] = useState(false);
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
+  const [summary, setSummary] = useState<SessionSummary | null>(data.summary);
 
   useEffect(() => {
     if (!message) return;
@@ -128,6 +141,18 @@ export function PosScreen({
   }, [session]);
 
   useEffect(() => { void refreshCashMovements(); }, [refreshCashMovements]);
+
+  const refreshSummary = useCallback(async () => {
+    if (!session) { setSummary(null); return; }
+    try {
+      const response = await fetch(`/api/pos/summary?sessionId=${encodeURIComponent(session.id)}`);
+      if (!response.ok) return;
+      const payload = await response.json();
+      setSummary((payload?.summary ?? null) as SessionSummary | null);
+    } catch { /* keep the last known summary */ }
+  }, [session]);
+
+  useEffect(() => { void refreshSummary(); }, [refreshSummary]);
 
   const syncQueue = useCallback(async () => {
     if (!navigator.onLine) return;
@@ -231,6 +256,7 @@ export function PosScreen({
       setMessage(t("pos.saleComplete"));
       setCart({}); setDiscount(0); setPaid(""); setCustomerId("");
       void refreshCashMovements();
+      void refreshSummary();
     } catch (err) {
       if (!online || (err instanceof Error && err.message === "offline") || (err instanceof TypeError)) {
         await enqueueSale(payload, key);
@@ -317,6 +343,7 @@ export function PosScreen({
       setInvoice("");
       setMessage(t("pos.cashOutSuccess"));
       await refreshCashMovements();
+      await refreshSummary();
     } catch (err) {
       setCashOutError(err instanceof Error ? err.message : t("common.error"));
     } finally {
@@ -336,14 +363,6 @@ export function PosScreen({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {data.branches.length > 0 ? (
-            <select className="input h-9 w-auto text-xs" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-              {data.branches.map((b) => <option key={b.id} value={b.id}>{locale === "ar" ? b.nameAr : b.nameEn}</option>)}
-            </select>
-          ) : null}
-          <select className="input h-9 w-auto text-xs" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-            {branchWarehouses.map((w) => <option key={w.id} value={w.id}>{locale === "ar" ? w.nameAr : w.nameEn}</option>)}
-          </select>
           {queued.length > 0 ? (
             <button className="btn btn-secondary" disabled={!online || busy} onClick={() => void syncQueue()} type="button">
               <RefreshCw className="h-4 w-4" /> {t("pos.syncQueue")} ({queued.length})
@@ -366,6 +385,33 @@ export function PosScreen({
           ) : null}
         </div>
       </div>
+
+      <section className="grid gap-3 sm:grid-cols-3">
+        <div className="card p-4">
+          <div className="flex items-start justify-between gap-2">
+            <span className="muted text-xs">{t("pos.summary.cash")}</span>
+            <Wallet className="h-4 w-4 text-emerald-500" />
+          </div>
+          <div className="mt-2 text-xl font-bold tabular-nums">{money(summary?.expectedCash ?? 0)}</div>
+          <div className="muted mt-1 text-[11px]">{t("pos.openingBalance")}: {money(summary?.openingBalance ?? 0)}</div>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-start justify-between gap-2">
+            <span className="muted text-xs">{t("pos.summary.expenses")}</span>
+            <Minus className="h-4 w-4 text-rose-500" />
+          </div>
+          <div className="mt-2 text-xl font-bold tabular-nums">{formatNumber(summary?.cashOutCount ?? 0, locale, 0)}</div>
+          <div className="muted mt-1 text-[11px]">{money(summary?.cashOut ?? 0)}</div>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-start justify-between gap-2">
+            <span className="muted text-xs">{t("pos.summary.operations")}</span>
+            <ShoppingCart className="h-4 w-4 text-sky-500" />
+          </div>
+          <div className="mt-2 text-xl font-bold tabular-nums">{formatNumber(summary?.saleCount ?? 0, locale, 0)}</div>
+          <div className="muted mt-1 text-[11px]">{money(summary?.cashSales ?? 0)}</div>
+        </div>
+      </section>
 
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
       {message ? (

@@ -106,13 +106,21 @@ export async function createSale(tx: Db, auth: AuthContext, input: {
   if (paid < total - 0.000001) {
     throw new AppError("VALIDATION", "Payments do not cover the invoice total", "المبالغ المدفوعة لا تغطي إجمالي الفاتورة");
   }
+  let cashAmount = 0;
+  let bankAmount = 0;
+  let creditAmount = 0;
+  for (const payment of input.payments) {
+    if (payment.method === "CASH") cashAmount += payment.amount;
+    else if (payment.method === "CREDIT") creditAmount += payment.amount;
+    else bankAmount += payment.amount;
+  }
   const invoiceNumber = await nextNumber(tx, auth.user.tenantId, auth.tenant.invoicePrefix, auth.tenant.invoicePrefix + "-");
   const sale = await tx.sale.create({
     data: {
       tenantId: auth.user.tenantId, branchId: input.branchId, warehouseId: input.warehouseId,
       customerId: input.customerId ?? null, invoiceNumber, status: "COMPLETED",
       subtotal, discountAmount: round(input.discountAmount ?? 0, 6), taxAmount: taxTotal,
-      total, paidAmount: paid, costAmount: cogs, profit: round(total - taxTotal - cogs, 6),
+      total, paidAmount: paid, isCredit: creditAmount > 0, costAmount: cogs, profit: round(total - taxTotal - cogs, 6),
       cashSessionId: input.cashSessionId ?? null, cashierId: auth.user.id,
       idempotencyKey: input.idempotencyKey ?? null, notes: input.notes ?? null,
     },
@@ -137,9 +145,6 @@ export async function createSale(tx: Db, auth: AuthContext, input: {
     data: { referenceId: sale.id },
   });
 
-  let cashAmount = 0;
-  let bankAmount = 0;
-  let creditAmount = 0;
   for (const payment of input.payments) {
     await tx.salePayment.create({
       data: {
@@ -148,9 +153,6 @@ export async function createSale(tx: Db, auth: AuthContext, input: {
         reference: payment.reference ?? null,
       },
     });
-    if (payment.method === "CASH") cashAmount += payment.amount;
-    else if (payment.method === "CREDIT") creditAmount += payment.amount;
-    else bankAmount += payment.amount;
   }
 
   const journalLines = buildSaleJournalLines({
@@ -364,7 +366,7 @@ export async function openCashSession(tx: Db, auth: AuthContext, input: {
   });
 }
 
-async function sessionCashTotals(tx: Db, auth: AuthContext, sessionId: string) {
+export async function sessionCashTotals(tx: Db, auth: AuthContext, sessionId: string) {
   const movements = await tx.cashMovement.findMany({ where: { tenantId: auth.user.tenantId, sessionId } });
   const sales = await tx.sale.findMany({
     where: {
@@ -380,6 +382,9 @@ async function sessionCashTotals(tx: Db, auth: AuthContext, sessionId: string) {
     cashSales: salePayments.reduce((s, p) => s + Number(p.amount), 0),
     cashIn: movements.filter((m) => m.kind === "IN").reduce((s, m) => s + Number(m.amount), 0),
     cashOut: movements.filter((m) => m.kind === "OUT").reduce((s, m) => s + Number(m.amount), 0),
+    saleCount: sales.length,
+    cashInCount: movements.filter((m) => m.kind === "IN").length,
+    cashOutCount: movements.filter((m) => m.kind === "OUT").length,
   };
 }
 
