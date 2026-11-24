@@ -1,7 +1,7 @@
 /**
  * Development seed. Idempotent: if the demo tenant exists it does nothing.
  * Creates a complete, interconnected bakery dataset and exercises the real
- * services (purchase receipt → sale → accounting).
+ * services (opening stock → sale → accounting).
  * Run: npm run db:seed
  */
 import { db } from "../src/lib/db";
@@ -12,7 +12,6 @@ import { DEFAULT_ROLE_PERMISSIONS, PERMISSIONS } from "../src/lib/permissions/ca
 import type { AuthContext } from "../src/lib/auth/session";
 import { receiveIngredient, addFinishedStock } from "../src/lib/inventory/stock";
 import { postJournal, ACCOUNT_CODES } from "../src/lib/accounting/ledger";
-import { createPurchaseOrder, approvePurchaseOrder, receiveGoods } from "../src/lib/purchasing/service";
 import { createSale } from "../src/lib/sales/service";
 import { nextNumber } from "../src/lib/sequence";
 
@@ -314,7 +313,7 @@ async function main() {
       },
     });
   }
-  // Opening stock, purchase order and receipt — all through real inventory services
+  // Opening stock — through the real inventory service
   await db.$transaction(async (tx) => {
     for (const [code, , , , , , , stock] of ingredientData) {
       await receiveIngredient(tx, {
@@ -348,30 +347,6 @@ async function main() {
       clockIn: new Date(Date.now() - 8 * 3_600_000),
       clockOut: new Date(Date.now() - 1 * 3_600_000), workedMinutes: 420,
     })),
-  });
-
-  await db.$transaction(async (tx) => {
-    const po = await createPurchaseOrder(tx, {
-      tenantId: tid, supplierId: "Al-Nahrain Foods", warehouseId: whRaw.id,
-      branchId: branchMain.id, expectedDate: new Date(Date.now() + 5 * 86_400_000),
-      createdById: users.get("STOREKEEPER")!,
-      items: [
-        { ingredientId: ingredients.get("FLOUR")!, quantity: 50, unitId: units.get("kg")!, unitPrice: 250 },
-        { ingredientId: ingredients.get("SUGAR")!, quantity: 25, unitId: units.get("kg")!, unitPrice: 200 },
-      ],
-    });
-    await approvePurchaseOrder(tx, { tenantId: tid, orderId: po.id, approvedById: users.get("OWNER")! });
-    const poItems = await tx.purchaseOrderItem.findMany({ where: { orderId: po.id } });
-    await receiveGoods(tx, {
-      tenantId: tid, orderId: po.id, supplierId: "Al-Nahrain Foods", warehouseId: whRaw.id,
-      receivedById: users.get("STOREKEEPER")!,
-      items: poItems.map((item) => ({
-        orderItemId: item.id, ingredientId: item.ingredientId,
-        quantity: Number(item.quantity), unitId: item.unitId, unitCost: Number(item.unitPrice),
-        lotNumber: `RCV-${item.id.slice(-4)}`,
-        expiryDate: new Date(Date.now() + 120 * 86_400_000),
-      })),
-    });
   });
 
   // Additional approved finished stock for POS demo

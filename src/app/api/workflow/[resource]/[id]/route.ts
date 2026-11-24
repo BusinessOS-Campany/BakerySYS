@@ -41,14 +41,6 @@ const CONFIG: Record<string, ResourceConfig> = {
     blockedMessage: "Only draft transfers can be changed",
     blockedMessageAr: "يمكن تعديل التحويل في حالة المسودة فقط",
   },
-  "purchasing-orders": {
-    model: "purchaseOrder",
-    permission: "purchases.manage",
-    fields: { expectedDate: "nullableDate", notes: "nullableString" },
-    blocked: (row) => row.status !== "DRAFT",
-    blockedMessage: "Only draft purchase orders can be changed",
-    blockedMessageAr: "يمكن تعديل أمر الشراء في حالة المسودة فقط",
-  },
 };
 
 type RouteCtx = { params: Promise<{ resource: string; id: string }> };

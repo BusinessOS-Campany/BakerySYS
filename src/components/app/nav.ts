@@ -34,12 +34,6 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    titleKey: "shell.section.purchasing",
-    items: [
-      { href: "/purchases", labelKey: "nav.purchases", icon: "ClipboardList", permission: "purchases.view" },
-    ],
-  },
-  {
     titleKey: "shell.section.finance",
     items: [
       { href: "/accounting", labelKey: "nav.accounting", icon: "Landmark", permission: "accounting.view" },

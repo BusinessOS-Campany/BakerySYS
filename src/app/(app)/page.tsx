@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  ArrowDownRight, ArrowUpRight, Boxes, CircleAlert, ClipboardList, Croissant,
+  ArrowDownRight, ArrowUpRight, Boxes, CircleAlert, Croissant,
   ReceiptText, TrendingUp, Wallet,
 } from "lucide-react";
 import { db } from "@/lib/db";
@@ -124,7 +124,6 @@ export default async function DashboardPage() {
 
   const quickActions = [
     { key: "sales.new", href: "/pos", icon: ReceiptText, show: auth.permissions.has("sales.create") },
-    { key: "nav.purchases", href: "/purchases?new=1", icon: ClipboardList, show: auth.permissions.has("purchases.manage") },
   ].filter((action) => action.show);
 
   return (
