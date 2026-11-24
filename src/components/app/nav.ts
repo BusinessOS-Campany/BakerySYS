@@ -36,7 +36,6 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     titleKey: "shell.section.finance",
     items: [
-      { href: "/accounting", labelKey: "nav.accounting", icon: "Landmark", permission: "accounting.view" },
       { href: "/expenses", labelKey: "nav.expenses", icon: "Wallet", permission: "expenses.view" },
       { href: "/reports", labelKey: "nav.reports", icon: "BarChart3", permission: "reports.view" },
     ],
