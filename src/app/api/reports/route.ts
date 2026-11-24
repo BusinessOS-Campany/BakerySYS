@@ -1,15 +1,18 @@
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { apiRoute } from "@/lib/http";
-import { getReportData } from "@/lib/reports/service";
+import { getReportData, resolveReportRange } from "@/lib/reports/service";
 import { serialize } from "@/lib/serialize";
 
 export const GET = apiRoute({
   permission: "reports.view",
   handler: async (_input, auth, req) => {
     const url = new URL(req.url);
-    const days = Math.min(Math.max(Number(url.searchParams.get("days") ?? 30), 1), 365);
-    const data = await getReportData(db, auth.user.tenantId, days);
-    return serialize(data);
+    const { range, meta } = resolveReportRange({
+      period: url.searchParams.get("period") ?? undefined,
+      days: url.searchParams.get("days") ?? undefined,
+    }, auth.tenant.timezone);
+    return serialize(await getReportData(db, auth.user.tenantId, range, meta));
   },
 });
 
@@ -20,12 +23,17 @@ function csvCell(value: unknown): string {
 
 export const POST = apiRoute({
   permission: "reports.export",
-  handler: async (_input, auth, req) => {
-    const body = await req.json().catch(() => ({})) as { days?: number };
-    const days = Math.min(Math.max(Number(body.days ?? 30), 1), 365);
-    const data = await getReportData(db, auth.user.tenantId, days);
+  schema: z.object({
+    period: z.enum(["day", "week", "month"]).optional(),
+    days: z.number().optional(),
+  }),
+  handler: async (input, auth) => {
+    const { range, meta } = resolveReportRange(input, auth.tenant.timezone);
+    const data = await getReportData(db, auth.user.tenantId, range, meta);
+    const periodLabel = meta.period === "custom" ? `${meta.days}d` : meta.period;
     const rows: (string | number)[][] = [
       ["Section", "Metric", "Value"],
+      ["Period", periodLabel, `${data.period.from} — ${data.period.to}`],
       ["Summary", "Revenue", data.summary.revenue],
       ["Summary", "COGS", data.summary.cogs],
       ["Summary", "Gross profit", data.summary.grossProfit],
@@ -43,7 +51,7 @@ export const POST = apiRoute({
     return new Response(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="bakery-report-${days}d.csv"`,
+        "Content-Disposition": `attachment; filename="bakery-report-${periodLabel}.csv"`,
       },
     });
   },

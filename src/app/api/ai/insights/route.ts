@@ -1,16 +1,20 @@
 import { db } from "@/lib/db";
 import { apiRoute } from "@/lib/http";
 import { getAIProvider } from "@/lib/ai/provider";
-import { getReportData } from "@/lib/reports/service";
+import { getReportData, resolveReportRange } from "@/lib/reports/service";
 import { checkLowStock } from "@/lib/notifications/notify";
 import { serialize } from "@/lib/serialize";
 
 export const GET = apiRoute({
   permission: "reports.view",
   handler: async (_input, auth, req) => {
-    const days = Math.min(Math.max(Number(new URL(req.url).searchParams.get("days") ?? 30), 1), 365);
+    const url = new URL(req.url);
+    const { range, meta } = resolveReportRange({
+      period: url.searchParams.get("period") ?? undefined,
+      days: url.searchParams.get("days") ?? undefined,
+    }, auth.tenant.timezone);
     const [report, lowStock] = await Promise.all([
-      getReportData(db, auth.user.tenantId, days),
+      getReportData(db, auth.user.tenantId, range, meta),
       checkLowStock(db, auth.user.tenantId),
     ]);
     const insights = await getAIProvider().insights({

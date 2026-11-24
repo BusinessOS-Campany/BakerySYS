@@ -1,18 +1,79 @@
 import type { Db } from "@/lib/db";
 import { round } from "@/lib/calculations";
 
+export type ReportPeriod = "day" | "week" | "month";
+export type ReportRange = { from: Date; to: Date };
+export type ReportMeta = { period: ReportPeriod | "custom"; days?: number };
+
+const DAY_MS = 86_400_000;
+
 const sum = (rows: { amount?: unknown; total?: unknown; profit?: unknown; costAmount?: unknown; quantity?: unknown; unitCost?: unknown }[], key: "amount" | "total" | "profit" | "costAmount") =>
   round(rows.reduce((acc, row) => acc + Number(row[key] ?? 0), 0), 6);
 
-export async function getReportData(db: Db, tenantId: string, days: number) {
-  const since = new Date(Date.now() - Math.max(days, 1) * 86_400_000);
+function dateKey(date: Date, timeZone: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(date);
+}
+
+function zoneOffset(date: Date, timeZone: string) {
+  const value = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })
+    .formatToParts(date).find((part) => part.type === "timeZoneName")?.value ?? "GMT";
+  const match = /^GMT([+-])(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return 0;
+  const minutes = Number(match[2]) * 60 + Number(match[3]);
+  return (match[1] === "-" ? -minutes : minutes) * 60_000;
+}
+
+/** Midnight of a calendar date in the tenant timezone, as an absolute instant. */
+function midnight(key: string, timeZone: string) {
+  const utc = new Date(`${key}T00:00:00.000Z`);
+  const estimate = new Date(utc.getTime() - zoneOffset(utc, timeZone));
+  return new Date(utc.getTime() - zoneOffset(estimate, timeZone));
+}
+
+function addDays(key: string, amount: number) {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + amount)).toISOString().slice(0, 10);
+}
+
+/** Today / this week (Monday-start) / this month, aligned to the tenant calendar. */
+export function getReportRange(period: ReportPeriod, timeZone: string, now = new Date()): ReportRange {
+  const today = dateKey(now, timeZone);
+  if (period === "day") {
+    return { from: midnight(today, timeZone), to: midnight(addDays(today, 1), timeZone) };
+  }
+  if (period === "week") {
+    const weekday = new Date(`${today}T00:00:00.000Z`).getUTCDay();
+    const monday = addDays(today, -((weekday + 6) % 7));
+    return { from: midnight(monday, timeZone), to: midnight(addDays(monday, 7), timeZone) };
+  }
+  const [year, month] = today.split("-").map(Number);
+  return {
+    from: midnight(new Date(Date.UTC(year, month - 1, 1)).toISOString().slice(0, 10), timeZone),
+    to: midnight(new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10), timeZone),
+  };
+}
+
+/** `period` takes precedence; `days` is kept for older clients. */
+export function resolveReportRange(input: { period?: unknown; days?: unknown }, timeZone: string): { range: ReportRange; meta: ReportMeta } {
+  if (typeof input.period === "string" && ["day", "week", "month"].includes(input.period)) {
+    const period = input.period as ReportPeriod;
+    return { range: getReportRange(period, timeZone), meta: { period } };
+  }
+  const parsed = Math.round(Number(input.days ?? 30));
+  const days = Math.min(Math.max(Number.isFinite(parsed) ? parsed : 30, 1), 365);
+  return { range: { from: new Date(Date.now() - days * DAY_MS), to: new Date() }, meta: { period: "custom", days } };
+}
+
+export async function getReportData(db: Db, tenantId: string, range: ReportRange, meta: ReportMeta = { period: "custom" }) {
   const [sales, expenses, ingredientLots, finishedLots, receivableBalances, payableBalances, journalEntries] = await Promise.all([
     db.sale.findMany({
-      where: { tenantId, status: "COMPLETED", isCredit: false, invoiceDate: { gte: since } },
+      where: { tenantId, status: "COMPLETED", isCredit: false, invoiceDate: { gte: range.from, lt: range.to } },
       select: { id: true, total: true, profit: true, costAmount: true, taxAmount: true, invoiceDate: true },
     }),
     db.expense.findMany({
-      where: { tenantId, status: "POSTED", expenseDate: { gte: since } },
+      where: { tenantId, status: "POSTED", expenseDate: { gte: range.from, lt: range.to } },
       select: { amount: true, categoryId: true },
     }),
     db.ingredientLot.findMany({ where: { tenantId, quantity: { gt: 0 } }, select: { quantity: true, unitCost: true } }),
@@ -20,7 +81,7 @@ export async function getReportData(db: Db, tenantId: string, days: number) {
     db.customerReceivable.findMany({ where: { tenantId, status: { in: ["OPEN", "PARTIAL"] } }, select: { amount: true, settled: true } }),
     db.supplierPayable.findMany({ where: { tenantId, status: { in: ["OPEN", "PARTIAL"] } }, select: { amount: true, settled: true } }),
     db.journalEntry.findMany({
-      where: { tenantId, status: "POSTED", date: { gte: since } },
+      where: { tenantId, status: "POSTED", date: { gte: range.from, lt: range.to } },
       select: { id: true, entryNumber: true, date: true, description: true },
     }),
   ]);
@@ -92,7 +153,7 @@ export async function getReportData(db: Db, tenantId: string, days: number) {
     .sort((a, b) => a.code.localeCompare(b.code));
 
   return {
-    period: { days, since: since.toISOString(), generatedAt: new Date().toISOString() },
+    period: { ...meta, from: range.from.toISOString(), to: range.to.toISOString(), generatedAt: new Date().toISOString() },
     summary: { revenue, cogs, grossProfit, tax, expenses: expenseTotal, netProfit, rawStockValue, finishedStockValue, receivables, payables },
     salesByProduct,
     trialBalance,
