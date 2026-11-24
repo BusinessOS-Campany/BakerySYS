@@ -6,6 +6,7 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { Download, FileText, Printer } from "lucide-react";
 import { apiFetch, L, type Locale } from "./shared";
+import { formatMoney } from "@/lib/i18n/dictionary";
 import { ReportSheet, type ReportData } from "./report-sheet";
 
 export type Period = "day" | "week" | "month";
@@ -31,7 +32,16 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
-  const periodTitle = L(locale, TABS.find((tab) => tab.key === period)!.ar, TABS.find((tab) => tab.key === period)!.en);
+  const tab = TABS.find((item) => item.key === period)!;
+  const periodTitle = L(locale, tab.ar, tab.en);
+  const money = (value: number) => formatMoney(value, locale, currency, decimalPlaces);
+  const cards = report ? [
+    { key: "revenue", label: L(locale, "الإيرادات", "Revenue"), value: money(report.summary.revenue), tone: "text-[var(--primary)]" },
+    { key: "profit", label: L(locale, "الربح الإجمالي", "Gross profit"), value: money(report.summary.grossProfit), tone: "text-emerald-500" },
+    { key: "expenses", label: L(locale, "المصروفات", "Expenses"), value: money(report.summary.expenses), tone: "text-[var(--danger)]" },
+    { key: "net", label: L(locale, "صافي الربح", "Net profit"), value: money(report.summary.netProfit), tone: report.summary.netProfit >= 0 ? "text-emerald-500" : "text-[var(--danger)]" },
+    { key: "receivables", label: L(locale, "المدينون", "Receivables"), value: money(report.summary.receivables), tone: "text-amber-500" },
+  ] : [];
 
   const load = useCallback(async () => {
     setError("");
@@ -150,6 +160,18 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
       </nav>
 
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+
+      {cards.length > 0 ? (
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {cards.map((card) => (
+            <div className="card p-4 transition-shadow hover:shadow-md" key={card.key}>
+              <div className="muted text-xs">{card.label}</div>
+              <div className={`mt-2 text-xl font-bold tabular-nums ${card.tone}`}>{card.value}</div>
+              <div className="muted mt-1 text-[11px]">{periodTitle}</div>
+            </div>
+          ))}
+        </section>
+      ) : null}
 
       {insights.length > 0 ? (
         <section className="card p-4">
