@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useDialog } from "@/components/ui/dialog";
 import { apiFetch, apiSend, L } from "./shared";
-import { formatNumber, type Locale } from "@/lib/i18n/dictionary";
+import { numericLocale, type Locale } from "@/lib/i18n/dictionary";
 
 type IngredientLot = {
   id: string;
@@ -32,6 +32,16 @@ type InventoryPayload = {
   ingredients: IngredientOption[];
   warehouses: WarehouseOption[];
 };
+
+/** Whole numbers show without a trailing ".00"; fractions keep up to 2 decimals. */
+function formatAmount(value: number | string, locale: Locale): string {
+  const n = typeof value === "string" ? Number(value) : value;
+  return new Intl.NumberFormat(numericLocale(locale), {
+    numberingSystem: "latn",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(n) ? n : 0);
+}
 
 export function InventoryPage({
   locale,
@@ -174,7 +184,7 @@ export function InventoryPage({
       );
       setExitLot(null);
       setMessage(
-        `${L(locale, "تم الصرف", "Exited")}: ${formatNumber(amount, locale)} · ${L(locale, "المتبقي", "Remaining")}: ${formatNumber(result.remaining, locale)}`,
+        `${L(locale, "تم الصرف", "Exited")}: ${formatAmount(amount, locale)} · ${L(locale, "المتبقي", "Remaining")}: ${formatAmount(result.remaining, locale)}`,
       );
       await load();
     } catch (err) {
@@ -232,8 +242,8 @@ export function InventoryPage({
       title: L(locale, "حذف دفعة المخزون", "Delete stock batch"),
       message: L(
         locale,
-        `سيتم صرف الكمية المتبقية (${formatNumber(lot.quantity, locale)}) من الدفعة «${lot.lotNumber}» وإزالة البطاقة. سيبقى سجل الحركة محفوظاً.`,
-        `The remaining quantity (${formatNumber(lot.quantity, locale)}) of batch "${lot.lotNumber}" will be exited and the card removed. The movement history is kept.`,
+        `سيتم صرف الكمية المتبقية (${formatAmount(lot.quantity, locale)}) من الدفعة «${lot.lotNumber}» وإزالة البطاقة. سيبقى سجل الحركة محفوظاً.`,
+        `The remaining quantity (${formatAmount(lot.quantity, locale)}) of batch "${lot.lotNumber}" will be exited and the card removed. The movement history is kept.`,
       ),
       confirmLabel: L(locale, "حذف", "Delete"),
       tone: "danger",
@@ -286,22 +296,22 @@ export function InventoryPage({
         <SummaryCard
           icon={Boxes}
           label={L(locale, "إجمالي الكمية", "Total quantity")}
-          value={formatNumber(totalQuantity, locale)}
+          value={formatAmount(totalQuantity, locale)}
         />
         <SummaryCard
           icon={Layers}
           label={L(locale, "عدد الدفعات", "Batches")}
-          value={formatNumber(lots.length, locale, 0)}
+          value={formatAmount(lots.length, locale)}
         />
         <SummaryCard
           icon={Wheat}
           label={L(locale, "حبوب / مطحون", "Grains / Ground")}
-          value={`${formatNumber(grainsCount, locale, 0)} / ${formatNumber(groundCount, locale, 0)}`}
+          value={`${formatAmount(grainsCount, locale)} / ${formatAmount(groundCount, locale)}`}
         />
         <SummaryCard
           icon={Check}
           label={L(locale, "تم التنقيه", "Cleaned")}
-          value={formatNumber(cleanedCount, locale, 0)}
+          value={formatAmount(cleanedCount, locale)}
         />
       </section>
 
@@ -377,10 +387,10 @@ export function InventoryPage({
         </form>
         {selectedProduct ? (
           <p className="muted mt-3 rounded-lg bg-[var(--surface-muted)] px-3 py-2 text-xs">
-            {L(locale, "سعر الوحدة", "Unit price")}: {formatNumber(unitPrice, locale)}
+            {L(locale, "سعر الوحدة", "Unit price")}: {formatAmount(unitPrice, locale)}
             <span className="mx-2">·</span>
             {L(locale, "الإجمالي", "Total")}:{" "}
-            <strong className="font-semibold">{formatNumber(previewTotal, locale)}</strong>
+            <strong className="font-semibold">{formatAmount(previewTotal, locale)}</strong>
           </p>
         ) : null}
       </section>
@@ -388,7 +398,7 @@ export function InventoryPage({
       <section>
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-sm font-bold">{L(locale, "بطاقات المخزون", "Stock cards")}</h2>
-          <span className="muted text-xs">{formatNumber(lots.length, locale, 0)}</span>
+          <span className="muted text-xs">{formatAmount(lots.length, locale)}</span>
         </div>
         {loading ? (
           <p className="muted card p-8 text-center text-sm">{L(locale, "جارٍ التحميل...", "Loading...")}</p>
@@ -422,15 +432,15 @@ export function InventoryPage({
                   <div className="flex items-end justify-between gap-2">
                     <div>
                       <div className="muted text-[11px]">{L(locale, "الكمية", "Quantity")}</div>
-                      <div className="mt-0.5 text-xl font-bold tabular-nums">{formatNumber(lot.quantity, locale)}</div>
+                      <div className="mt-0.5 text-xl font-bold tabular-nums">{formatAmount(lot.quantity, locale)}</div>
                     </div>
                     <div className="text-end">
                       <div className="muted text-[11px]">{L(locale, "القيمة", "Value")}</div>
                       <div className="mt-0.5 text-xl font-bold tabular-nums text-[var(--primary)]">
-                        {formatNumber(lineValue, locale)}
+                        {formatAmount(lineValue, locale)}
                       </div>
                       <div className="muted text-[10px] tabular-nums">
-                        {L(locale, "سعر الوحدة", "Unit price")}: {formatNumber(lot.unitCost, locale)}
+                        {L(locale, "سعر الوحدة", "Unit price")}: {formatAmount(lot.unitCost, locale)}
                       </div>
                     </div>
                   </div>
@@ -513,7 +523,7 @@ export function InventoryPage({
               {exitError ? <p className="arap-modal-error">{exitError}</p> : null}
               <p className="muted rounded-lg bg-[var(--surface-muted)] px-3 py-2 text-xs">
                 {exitLot.lotNumber} · {L(locale, "المتاح", "Available")}:{" "}
-                <strong className="font-semibold">{formatNumber(exitLot.quantity, locale)}</strong>
+                <strong className="font-semibold">{formatAmount(exitLot.quantity, locale)}</strong>
               </p>
               <label className="arap-modal-field" htmlFor="lot-exit-quantity">
                 <span className="arap-modal-label">{L(locale, "الكمية المصروفة", "Exit quantity")}</span>
@@ -541,7 +551,7 @@ export function InventoryPage({
               </label>
               <p className="muted text-xs">
                 {L(locale, "المتبقي بعد الصرف", "Remaining after exit")}:{" "}
-                <strong className="font-semibold">{formatNumber(exitPreview, locale)}</strong>
+                <strong className="font-semibold">{formatAmount(exitPreview, locale)}</strong>
               </p>
             </div>
             <div className="arap-modal-footer">
