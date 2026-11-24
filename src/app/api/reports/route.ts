@@ -17,8 +17,10 @@ export const GET = apiRoute({
 });
 
 function csvCell(value: unknown): string {
-  const text = value === null || value === undefined ? "" : String(value);
-  return `"${text.replaceAll('"', '""')}"`;
+  if (value === null || value === undefined) return "";
+  if (typeof value === "number") return String(value);
+  const text = String(value);
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
 export const POST = apiRoute({
@@ -31,27 +33,38 @@ export const POST = apiRoute({
     const { range, meta } = resolveReportRange(input, auth.tenant.timezone);
     const data = await getReportData(db, auth.user.tenantId, range, meta);
     const periodLabel = meta.period === "custom" ? `${meta.days}d` : meta.period;
+    const periodTitle = { day: "Daily", week: "Weekly", month: "Monthly", custom: `${meta.days ?? 30} days` }[meta.period];
     const rows: (string | number)[][] = [
-      ["Section", "Metric", "Value"],
-      ["Period", periodLabel, `${data.period.from} — ${data.period.to}`],
-      ["Summary", "Revenue", data.summary.revenue],
-      ["Summary", "COGS", data.summary.cogs],
-      ["Summary", "Gross profit", data.summary.grossProfit],
-      ["Summary", "Tax", data.summary.tax],
-      ["Summary", "Expenses", data.summary.expenses],
-      ["Summary", "Net profit", data.summary.netProfit],
-      ["Summary", "Raw stock value", data.summary.rawStockValue],
-      ["Summary", "Finished stock value", data.summary.finishedStockValue],
-      ["Summary", "Receivables", data.summary.receivables],
-      ["Summary", "Payables", data.summary.payables],
-      ...data.salesByProduct.map((row) => ["Sales by product", row.name, row.revenue] as (string | number)[]),
-      ...data.trialBalance.map((row) => ["Trial balance", `${row.code} ${row.name}`, `${row.debit}/${row.credit}`] as (string | number)[]),
+      [auth.tenant.nameEn || "Bakery ERP", "Reports & analytics"],
+      ["Period", periodTitle, `${data.period.from} — ${data.period.to}`],
+      ["Generated at", data.period.generatedAt],
+      [],
+      ["Summary", "Value"],
+      ["Revenue", data.summary.revenue],
+      ["COGS", data.summary.cogs],
+      ["Gross profit", data.summary.grossProfit],
+      ["Tax", data.summary.tax],
+      ["Expenses", data.summary.expenses],
+      ["Net profit", data.summary.netProfit],
+      ["Raw stock value", data.summary.rawStockValue],
+      ["Finished stock value", data.summary.finishedStockValue],
+      ["Receivables", data.summary.receivables],
+      ["Payables", data.summary.payables],
+      [],
+      ["Sales by product", "Qty", "Revenue", "COGS", "Profit"],
+      ...data.salesByProduct.map((row) => [row.name, row.quantity, row.revenue, row.cogs, row.profit] as (string | number)[]),
+      [],
+      ["Trial balance", "Debit", "Credit"],
+      ...data.trialBalance.map((row) => [`${row.code} ${row.name}`, row.debit, row.credit] as (string | number)[]),
+      [],
+      ["Journal entries", "Number", "Date", "Description"],
+      ...data.journalEntries.map((row) => [row.entryNumber, row.date, row.description] as (string | number)[]),
     ];
     const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
     return new Response(csv, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="bakery-report-${periodLabel}.csv"`,
+        "Content-Disposition": `attachment; filename="bakery-report-${periodLabel}-${data.period.generatedAt.slice(0, 10)}.csv"`,
       },
     });
   },

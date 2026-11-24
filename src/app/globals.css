@@ -486,4 +486,22 @@ table.data-table tbody tr:hover { background: var(--surface-muted); }
   .invoice-print-totals { margin-top: 6mm; margin-inline-start: auto; width: 70mm; }
   .invoice-print-totals > div { display: flex; justify-content: space-between; gap: 4mm; padding: 1mm 0; }
   .invoice-print-totals .invoice-print-total { border-top: 1px solid #111; font-weight: 700; }
+
+  .report-print-root, .report-print-root * { visibility: visible !important; }
+  .report-print-root {
+    position: absolute !important;
+    top: 0 !important;
+    inset-inline-start: 0 !important;
+    width: 210mm !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  .report-print-root h2 { break-after: avoid; page-break-after: avoid; }
+  .report-print-root tr { break-inside: avoid; page-break-inside: avoid; }
 }
