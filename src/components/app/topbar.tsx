@@ -148,7 +148,7 @@ export function Topbar({
         >
           <Search className="h-4 w-4" />
         </Link>
-        {(canSeeAllBranches || branches.length > 1) ? (
+        {branches.length > 1 ? (
           <select
             aria-label={t("common.branch")}
             className="input h-9 w-auto max-w-[9rem] text-xs"
