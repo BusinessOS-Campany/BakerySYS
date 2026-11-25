@@ -28,35 +28,6 @@ function dateKeyInZone(date: Date, timeZone: string) {
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
-function mondayOfKey(key: string) {
-  const date = new Date(`${key}T00:00:00.000Z`);
-  const weekday = date.getUTCDay() || 7;
-  return new Date(date.getTime() - (weekday - 1) * DAY_MS);
-}
-
-function weekValueFromKey(key: string) {
-  const monday = mondayOfKey(key);
-  const thursday = new Date(monday.getTime() + 3 * DAY_MS);
-  const year = thursday.getUTCFullYear();
-  const jan4 = new Date(Date.UTC(year, 0, 4));
-  const jan4Weekday = jan4.getUTCDay() || 7;
-  const week1Monday = new Date(jan4.getTime() - (jan4Weekday - 1) * DAY_MS);
-  const week = Math.floor((monday.getTime() - week1Monday.getTime()) / (7 * DAY_MS)) + 1;
-  return `${year}-W${String(week).padStart(2, "0")}`;
-}
-
-function keyFromWeekValue(value: string, fallback: string) {
-  const match = /^(\d{4})-W(\d{2})$/.exec(value);
-  if (!match) return fallback;
-  const year = Number(match[1]);
-  const week = Number(match[2]);
-  if (week < 1 || week > 53) return fallback;
-  const jan4 = new Date(Date.UTC(year, 0, 4));
-  const jan4Weekday = jan4.getUTCDay() || 7;
-  const week1Monday = new Date(jan4.getTime() - (jan4Weekday - 1) * DAY_MS);
-  return new Date(week1Monday.getTime() + (week - 1) * 7 * DAY_MS).toISOString().slice(0, 10);
-}
-
 export function ReportsPage({ locale, canExport, currency, decimalPlaces, period, tenantName, timezone }: {
   locale: Locale;
   canExport: boolean;
@@ -79,10 +50,14 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
   const selectorLabel = period === "day"
     ? L(locale, "اختر اليوم", "Select day")
     : period === "week"
-      ? L(locale, "اختر الأسبوع", "Select week")
-      : L(locale, "اختر الشهر", "Select month");
-  const selectorType = period === "day" ? "date" : period === "week" ? "week" : "month";
-  const selectorValue = period === "week" ? weekValueFromKey(anchor) : period === "month" ? anchor.slice(0, 7) : anchor;
+      ? L(locale, "اختر تاريخاً داخل الأسبوع", "Pick a date in the week")
+      : L(locale, "اختر تاريخاً داخل الشهر", "Pick a date in the month");
+  const selectorHint = period === "day"
+    ? L(locale, "يُستخدم اليوم المحدد للطباعة وملف CSV", "The selected day is used for printing and CSV")
+    : period === "week"
+      ? L(locale, "يُستخدم الأسبوع الذي يحتوي هذا التاريخ للطباعة وملف CSV", "The week containing this date is used for printing and CSV")
+      : L(locale, "يُستخدم الشهر الذي يحتوي هذا التاريخ للطباعة وملف CSV", "The month containing this date is used for printing and CSV");
+  const selectorValue = anchor;
   const selectedRange = report
     ? `${formatDate(report.period.from, locale)} — ${formatDate(new Date(Date.parse(report.period.to) - DAY_MS), locale)}`
     : "";
@@ -195,14 +170,10 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
               className="input h-8 w-auto min-w-[10rem] text-xs"
               id="report-period-selector"
               onChange={(event) => {
-                const raw = event.target.value;
-                if (!raw) return;
-                if (period === "week") setAnchor(keyFromWeekValue(raw, anchor));
-                else if (period === "month") setAnchor(`${raw}-01`);
-                else setAnchor(raw);
+                if (event.target.value) setAnchor(event.target.value);
               }}
-              title={L(locale, "تُستخدم هذه الفترة للطباعة وملف CSV", "This period is used for printing and CSV")}
-              type={selectorType}
+              title={selectorHint}
+              type="date"
               value={selectorValue}
             />
             {selectedRange ? <span className="muted hidden text-[11px] tabular-nums lg:inline">{selectedRange}</span> : null}
