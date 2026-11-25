@@ -10,7 +10,6 @@ import { formatDate, formatMoney } from "@/lib/i18n/dictionary";
 import { ReportSheet, type ReportData } from "./report-sheet";
 
 export type Period = "day" | "week" | "month";
-type Insight = { kind: string; title: string; body: string; metric?: number; link?: string };
 
 const TABS: { key: Period; href: string; ar: string; en: string }[] = [
   { key: "day", href: "/reports/daily", ar: "يومي", en: "Daily" },
@@ -39,8 +38,6 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
 }) {
   const [report, setReport] = useState<ReportData | null>(null);
   const [anchor, setAnchor] = useState(() => dateKeyInZone(new Date(), timezone));
-  const [insights, setInsights] = useState<Insight[]>([]);
-  const [provider, setProvider] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -79,13 +76,8 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
     setError("");
     try {
       const query = new URLSearchParams({ period, date: anchor });
-      const [data, ai] = await Promise.all([
-        apiFetch<ReportData>(`/api/reports?${query}`, locale),
-        apiFetch<{ provider: string; insights: Insight[] }>(`/api/ai/insights?${query}`, locale),
-      ]);
+      const data = await apiFetch<ReportData>(`/api/reports?${query}`, locale);
       setReport(data);
-      setInsights(ai.insights);
-      setProvider(ai.provider);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -217,29 +209,6 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
               <div className="muted mt-1 text-[11px]">{periodTitle}</div>
             </div>
           ))}
-        </section>
-      ) : null}
-
-      {insights.length > 0 ? (
-        <section className="card p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold">{L(locale, "رؤى ذكية", "AI insights")}</h2>
-            <span className="muted text-xs">{provider || "—"}</span>
-          </div>
-          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {insights.map((insight) => (
-              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3" key={`${insight.kind}-${insight.title}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold">{insight.title}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] ${insight.kind === "RISK" ? "bg-red-100 text-red-700" : insight.kind === "ACTION" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
-                    {insight.kind}
-                  </span>
-                </div>
-                <p className="muted mt-2 text-xs leading-relaxed">{insight.body}</p>
-                {insight.metric !== undefined ? <p className="mt-2 text-sm font-bold tabular-nums">{insight.metric}</p> : null}
-              </div>
-            ))}
-          </div>
         </section>
       ) : null}
 
