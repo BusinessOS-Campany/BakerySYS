@@ -27,8 +27,7 @@ export function ExpensesPage({ locale, canManage }: { locale: Locale; canManage:
   const { confirm } = useDialog();
   const [refresh, setRefresh] = useState(0);
   const expenses = useList<ExpenseRow>("/api/expenses?pageSize=100", undefined, locale, refresh);
-  const lookups = useLookups(["expense-categories", "accounts"], locale);
-  const categoryOptions = lookupOptions(lookups["expense-categories"] ?? [], locale);
+  const lookups = useLookups(["accounts"], locale);
   const accountOptions = lookupOptions(lookups.accounts ?? [], locale);
 
   return (
@@ -94,17 +93,8 @@ export function ExpensesPage({ locale, canManage }: { locale: Locale; canManage:
           fields: [
             { name: "amount", label: L(locale, "المبلغ", "Amount"), type: "number", required: true },
             { name: "expenseDate", label: L(locale, "التاريخ", "Date"), type: "date" },
-            { name: "categoryId", label: L(locale, "التصنيف", "Category"), type: "select", options: categoryOptions },
             { name: "accountId", label: L(locale, "الحساب", "Account"), type: "select", options: accountOptions },
-            { name: "vendor", label: L(locale, "الجهة", "Vendor") },
-            { name: "taxAmount", label: L(locale, "ضريبة", "Tax"), type: "number", defaultValue: "0" },
-            { name: "method", label: L(locale, "طريقة الدفع", "Payment method"), type: "select", defaultValue: "CASH", options: [
-              { value: "CASH", label: L(locale, "نقد", "Cash") },
-              { value: "BANK_TRANSFER", label: L(locale, "تحويل بنكي", "Bank transfer") },
-              { value: "CARD", label: L(locale, "بطاقة", "Card") },
-              { value: "CHEQUE", label: L(locale, "شيك", "Cheque") },
-            ] },
-            { name: "description", label: L(locale, "البيان", "Description"), type: "textarea" },
+            { name: "description", label: L(locale, "ملاحظات", "Notes"), type: "textarea" },
           ],
           build: (values) => ({
             amount: Number(values.amount),
