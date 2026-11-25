@@ -5,5 +5,5 @@ export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const auth = await requireWorkflow(["sales.view"]);
-  return <MealsPage canManage={canAny(auth, ["sales.create"])} locale={auth.locale} />;
+  return <MealsPage canManage={canAny(auth, ["sales.create"])} locale={auth.locale} timezone={auth.tenant.timezone} />;
 }

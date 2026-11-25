@@ -285,6 +285,7 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
             ref={sheetRef}
             report={report}
             tenantName={tenantName}
+            timezone={timezone}
           />
         ) : (
           <p className="muted p-10 text-center text-sm">{L(locale, "جارٍ تحميل التقرير...", "Loading report...")}</p>

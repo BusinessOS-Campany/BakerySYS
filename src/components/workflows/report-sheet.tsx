@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, type CSSProperties } from "react";
-import { formatDate, formatMoney, numericLocale } from "@/lib/i18n/dictionary";
+import { formatDate, formatDateTime, formatMoney, numericLocale } from "@/lib/i18n/dictionary";
 import { L, type Locale } from "./shared";
 
 export type ReportData = {
@@ -57,10 +57,11 @@ type Props = {
   decimalPlaces: number;
   periodTitle: string;
   tenantName: string;
+  timezone: string;
 };
 
 export const ReportSheet = forwardRef<HTMLDivElement, Props>(function ReportSheet(
-  { report, locale, currency, decimalPlaces, periodTitle, tenantName }, ref,
+  { report, locale, currency, decimalPlaces, periodTitle, tenantName, timezone }, ref,
 ) {
   const rtl = locale === "ar";
   const align: CSSProperties = { textAlign: rtl ? "right" : "left" };
@@ -140,11 +141,11 @@ export const ReportSheet = forwardRef<HTMLDivElement, Props>(function ReportShee
 
       <h2 style={sectionTitle}>{L(locale, "الوجبات المقدمة", "Meals served")}</h2>
       {table(
-        [L(locale, "الوجبة", "Meal"), L(locale, "التاريخ", "Date"), L(locale, "الكمية (كجم)", "Quantity (kg)")],
+        [L(locale, "الوجبة", "Meal"), L(locale, "التاريخ والوقت", "Date & time"), L(locale, "الكمية (كجم)", "Quantity (kg)")],
         [
           ...report.meals.map((meal) => [
             meal.name,
-            formatDate(meal.servedAt, locale),
+            formatDateTime(meal.servedAt, locale, timezone, true),
             Number(meal.quantityKg).toLocaleString(numericLocale(locale), { maximumFractionDigits: 3 }),
           ] as (string | number)[]),
           [`${L(locale, "الإجمالي", "Total")} (${report.summary.mealsCount})`, "", Number(report.summary.mealsTotalKg).toLocaleString(numericLocale(locale), { maximumFractionDigits: 3 })],

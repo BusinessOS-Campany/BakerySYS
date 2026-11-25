@@ -148,7 +148,7 @@ export function FieldInput({
           ))}
         </select>
       ) : (
-        <input {...common} step={type === "number" ? "any" : undefined} type={type === "datetime" ? "datetime-local" : type === "date" ? "date" : type} />
+        <input {...common} step={type === "number" ? "any" : type === "datetime" ? "1" : undefined} type={type === "datetime" ? "datetime-local" : type === "date" ? "date" : type} />
       )}
       {field.hint ? <p className="muted text-[11px]">{field.hint}</p> : null}
     </div>

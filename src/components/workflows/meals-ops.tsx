@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { DataPanel, L, numericLocale, useList, type Locale } from "./shared";
-import { formatDate } from "@/lib/i18n/dictionary";
+import { formatDateTime } from "@/lib/i18n/dictionary";
+import { dateTimeLocalToIso, dateTimeLocalValue, zonedDateKey } from "@/lib/datetime";
 
 type MealRow = {
   id: string;
@@ -13,13 +14,15 @@ type MealRow = {
   branchId: string | null;
 };
 
-export function MealsPage({ locale, canManage }: { locale: Locale; canManage: boolean }) {
+export function MealsPage({ locale, canManage, timezone }: { locale: Locale; canManage: boolean; timezone: string }) {
   const [refresh, setRefresh] = useState(0);
   const meals = useList<MealRow>("/api/meals", undefined, locale, refresh);
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const defaultDateTime = dateTimeLocalValue(now, timezone);
+  const todayKey = zonedDateKey(now, timezone);
   const totalKg = meals.rows.reduce((sum, row) => sum + Number(row.quantityKg), 0);
   const todayKg = meals.rows
-    .filter((row) => new Date(row.servedAt).toISOString().slice(0, 10) === today)
+    .filter((row) => zonedDateKey(new Date(row.servedAt), timezone) === todayKey)
     .reduce((sum, row) => sum + Number(row.quantityKg), 0);
 
   return (
@@ -62,7 +65,7 @@ export function MealsPage({ locale, canManage }: { locale: Locale; canManage: bo
         locale={locale}
         canManage={canManage}
         columns={[
-          { key: "servedAt", label: L(locale, "التاريخ", "Date"), render: (row) => formatDate(row.servedAt, locale) },
+          { key: "servedAt", label: L(locale, "التاريخ والوقت", "Date & time"), render: (row) => formatDateTime(row.servedAt, locale, timezone, true) },
           { key: "name", label: L(locale, "الوجبة", "Meal") },
           {
             key: "quantityKg",
@@ -79,19 +82,26 @@ export function MealsPage({ locale, canManage }: { locale: Locale; canManage: bo
           itemMethod: "PATCH",
           enabled: canManage,
           initialFromRow: (row) => ({
-            servedAt: new Date(row.servedAt).toISOString().slice(0, 10),
+            servedAt: dateTimeLocalValue(new Date(row.servedAt), timezone),
             name: row.name,
             quantityKg: String(row.quantityKg),
             note: row.note ?? "",
           }),
           fields: [
-            { name: "servedAt", label: L(locale, "التاريخ", "Date"), type: "date", defaultValue: today, required: true },
+            {
+              name: "servedAt",
+              label: L(locale, "التاريخ والوقت", "Date & time"),
+              type: "datetime",
+              defaultValue: defaultDateTime,
+              required: true,
+              hint: L(locale, "يشمل الساعات والدقائق والثواني", "Includes hours, minutes and seconds"),
+            },
             { name: "name", label: L(locale, "اسم الوجبة", "Meal name"), type: "text", required: true, placeholder: L(locale, "مثال: الوجبة الأولى", "e.g. First meal") },
             { name: "quantityKg", label: L(locale, "الكمية بالكيلو", "Quantity (kg)"), type: "number", required: true },
             { name: "note", label: L(locale, "ملاحظة", "Note"), type: "textarea" },
           ],
           build: (values) => ({
-            servedAt: new Date(`${String(values.servedAt || today)}T12:00:00.000Z`).toISOString(),
+            servedAt: dateTimeLocalToIso(String(values.servedAt || defaultDateTime), timezone),
             name: String(values.name ?? "").trim(),
             quantityKg: Number(values.quantityKg),
             note: String(values.note ?? "") || null,

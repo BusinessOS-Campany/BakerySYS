@@ -478,6 +478,18 @@ export function formatDate(value: Date | string, locale: Locale, withTime = fals
   }).format(d);
 }
 
+export function formatDateTime(value: Date | string, locale: Locale, timeZone?: string, withSeconds = true): string {
+  const d = typeof value === "string" ? new Date(value) : value;
+  return new Intl.DateTimeFormat(numericLocale(locale), {
+    numberingSystem: "latn",
+    ...(timeZone ? { timeZone } : {}),
+    year: "numeric", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+    ...(withSeconds ? { second: "2-digit" } : {}),
+    hourCycle: "h23",
+  }).format(d);
+}
+
 export function formatNumber(value: number | string, locale: Locale, dp = 2): string {
   const n = typeof value === "string" ? Number(value) : value;
   return new Intl.NumberFormat(numericLocale(locale), {
