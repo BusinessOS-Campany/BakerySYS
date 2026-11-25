@@ -24,6 +24,7 @@ export default async function Page({ params }: { params: Promise<{ period: strin
       locale={auth.locale}
       period={period}
       tenantName={auth.locale === "ar" ? auth.tenant.nameAr : auth.tenant.nameEn}
+      timezone={auth.tenant.timezone}
     />
   );
 }

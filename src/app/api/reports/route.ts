@@ -11,6 +11,7 @@ export const GET = apiRoute({
     const { range, meta } = resolveReportRange({
       period: url.searchParams.get("period") ?? undefined,
       days: url.searchParams.get("days") ?? undefined,
+      date: url.searchParams.get("date") ?? undefined,
     }, auth.tenant.timezone);
     return serialize(await getReportData(db, auth.user.tenantId, range, meta));
   },
@@ -28,6 +29,7 @@ export const POST = apiRoute({
   schema: z.object({
     period: z.enum(["day", "week", "month"]).optional(),
     days: z.number().optional(),
+    date: z.string().optional(),
   }),
   handler: async (input, auth) => {
     const { range, meta } = resolveReportRange(input, auth.tenant.timezone);
@@ -50,6 +52,12 @@ export const POST = apiRoute({
       ["Finished stock value", data.summary.finishedStockValue],
       ["Receivables", data.summary.receivables],
       ["Payables", data.summary.payables],
+      ["Meals total (kg)", data.summary.mealsTotalKg],
+      ["Meals count", data.summary.mealsCount],
+      [],
+      ["Meals served", "Date", "Quantity (kg)", "Note"],
+      ...data.meals.map((meal) => [meal.name, meal.servedAt, Number(meal.quantityKg), meal.note ?? ""] as (string | number)[]),
+      ["Total", "", data.summary.mealsTotalKg, `Entries: ${data.summary.mealsCount}`],
       [],
       ["Sales by product", "Qty", "Revenue", "COGS", "Profit"],
       ...data.salesByProduct.map((row) => [row.name, row.quantity, row.revenue, row.cogs, row.profit] as (string | number)[]),

@@ -1487,3 +1487,19 @@ model OfflineSyncRecord {
   @@index([tenantId, status])
   @@map("offline_sync_records")
 }
+
+// ─────────────────── Meals served ───────────────────
+model MealServing {
+  id         String   @id @default(cuid())
+  tenantId   String
+  branchId   String?
+  servedAt   DateTime @default(now())
+  name       String
+  quantityKg Decimal  @db.Decimal(18, 3)
+  note       String?
+  createdBy  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([tenantId, servedAt])
+  @@map("meal_servings")
+}

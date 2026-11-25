@@ -13,6 +13,7 @@ export default async function Page() {
       locale={auth.locale}
       period="month"
       tenantName={auth.locale === "ar" ? auth.tenant.nameAr : auth.tenant.nameEn}
+      timezone={auth.tenant.timezone}
     />
   );
 }

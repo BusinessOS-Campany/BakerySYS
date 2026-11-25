@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, type CSSProperties } from "react";
-import { formatDate, formatMoney } from "@/lib/i18n/dictionary";
+import { formatDate, formatMoney, numericLocale } from "@/lib/i18n/dictionary";
 import { L, type Locale } from "./shared";
 
 export type ReportData = {
@@ -9,10 +9,12 @@ export type ReportData = {
   summary: {
     revenue: number; cogs: number; grossProfit: number; tax: number; expenses: number;
     netProfit: number; rawStockValue: number; finishedStockValue: number; receivables: number; payables: number;
+    mealsTotalKg: number; mealsCount: number;
   };
   salesByProduct: { productId: string; name: string; nameAr: string; sku: string; revenue: number; cogs: number; profit: number; quantity: number }[];
   trialBalance: { code: string; name: string; debit: number; credit: number }[];
   journalEntries: { id: string; entryNumber: string; date: string; description: string }[];
+  meals: { id: string; name: string; servedAt: string; quantityKg: string | number; note: string | null }[];
 };
 
 const sheetStyle: CSSProperties = {
@@ -134,6 +136,19 @@ export const ReportSheet = forwardRef<HTMLDivElement, Props>(function ReportShee
       {table(
         [L(locale, "الحساب", "Account"), L(locale, "مدين", "Debit"), L(locale, "دائن", "Credit")],
         report.trialBalance.map((row) => [`${row.code} · ${row.name}`, money(row.debit), money(row.credit)]),
+      )}
+
+      <h2 style={sectionTitle}>{L(locale, "الوجبات المقدمة", "Meals served")}</h2>
+      {table(
+        [L(locale, "الوجبة", "Meal"), L(locale, "التاريخ", "Date"), L(locale, "الكمية (كجم)", "Quantity (kg)")],
+        [
+          ...report.meals.map((meal) => [
+            meal.name,
+            formatDate(meal.servedAt, locale),
+            Number(meal.quantityKg).toLocaleString(numericLocale(locale), { maximumFractionDigits: 3 }),
+          ] as (string | number)[]),
+          [`${L(locale, "الإجمالي", "Total")} (${report.summary.mealsCount})`, "", Number(report.summary.mealsTotalKg).toLocaleString(numericLocale(locale), { maximumFractionDigits: 3 })],
+        ],
       )}
 
       <h2 style={sectionTitle}>{L(locale, "قيود اليومية", "Journal entries")}</h2>

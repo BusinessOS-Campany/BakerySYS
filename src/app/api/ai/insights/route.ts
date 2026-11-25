@@ -12,6 +12,7 @@ export const GET = apiRoute({
     const { range, meta } = resolveReportRange({
       period: url.searchParams.get("period") ?? undefined,
       days: url.searchParams.get("days") ?? undefined,
+      date: url.searchParams.get("date") ?? undefined,
     }, auth.tenant.timezone);
     const [report, lowStock] = await Promise.all([
       getReportData(db, auth.user.tenantId, range, meta),

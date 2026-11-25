@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3, Boxes, ClipboardList, Croissant, Landmark,
   LayoutDashboard, PackagePlus, PanelLeftClose, PanelLeftOpen, ReceiptText, Settings,
-  ShoppingCart, Tags, UserCog, UsersRound, Wallet,
+  ShoppingCart, Tags, UserCog, UsersRound, UtensilsCrossed, Wallet,
   Warehouse, X, type LucideIcon,
 } from "lucide-react";
 import { NAV_SECTIONS } from "./nav";
@@ -15,7 +15,7 @@ import { translate, type Locale } from "@/lib/i18n/dictionary";
 const ICONS: Record<string, LucideIcon> = {
   BarChart3, Boxes, ClipboardList, Croissant, Landmark,
   LayoutDashboard, PackagePlus, ReceiptText, Settings, ShoppingCart, Tags,
-  UserCog, UsersRound, Wallet, Warehouse,
+  UserCog, UsersRound, UtensilsCrossed, Wallet, Warehouse,
 };
 
 export function Sidebar({

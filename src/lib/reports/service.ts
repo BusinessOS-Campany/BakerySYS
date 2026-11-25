@@ -16,6 +16,13 @@ function dateKey(date: Date, timeZone: string) {
   }).format(date);
 }
 
+function parseDateKey(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value ? null : value;
+}
+
 function zoneOffset(date: Date, timeZone: string) {
   const value = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })
     .formatToParts(date).find((part) => part.type === "timeZoneName")?.value ?? "GMT";
@@ -37,9 +44,9 @@ function addDays(key: string, amount: number) {
   return new Date(Date.UTC(year, month - 1, day + amount)).toISOString().slice(0, 10);
 }
 
-/** Today / this week (Monday-start) / this month, aligned to the tenant calendar. */
-export function getReportRange(period: ReportPeriod, timeZone: string, now = new Date()): ReportRange {
-  const today = dateKey(now, timeZone);
+/** Selected day/week/month (or today when no anchor is given), aligned to the tenant calendar. */
+export function getReportRange(period: ReportPeriod, timeZone: string, now = new Date(), anchor?: string): ReportRange {
+  const today = parseDateKey(anchor) ?? dateKey(now, timeZone);
   if (period === "day") {
     return { from: midnight(today, timeZone), to: midnight(addDays(today, 1), timeZone) };
   }
@@ -56,10 +63,11 @@ export function getReportRange(period: ReportPeriod, timeZone: string, now = new
 }
 
 /** `period` takes precedence; `days` is kept for older clients. */
-export function resolveReportRange(input: { period?: unknown; days?: unknown }, timeZone: string): { range: ReportRange; meta: ReportMeta } {
+export function resolveReportRange(input: { period?: unknown; days?: unknown; date?: unknown; anchor?: unknown }, timeZone: string): { range: ReportRange; meta: ReportMeta } {
+  const anchor = parseDateKey(input.date ?? input.anchor) ?? undefined;
   if (typeof input.period === "string" && ["day", "week", "month"].includes(input.period)) {
     const period = input.period as ReportPeriod;
-    return { range: getReportRange(period, timeZone), meta: { period } };
+    return { range: getReportRange(period, timeZone, new Date(), anchor), meta: { period } };
   }
   const parsed = Math.round(Number(input.days ?? 30));
   const days = Math.min(Math.max(Number.isFinite(parsed) ? parsed : 30, 1), 365);
@@ -67,7 +75,7 @@ export function resolveReportRange(input: { period?: unknown; days?: unknown }, 
 }
 
 export async function getReportData(db: Db, tenantId: string, range: ReportRange, meta: ReportMeta = { period: "custom" }) {
-  const [sales, expenses, ingredientLots, finishedLots, receivableBalances, payableBalances, journalEntries] = await Promise.all([
+  const [sales, expenses, ingredientLots, finishedLots, receivableBalances, payableBalances, journalEntries, meals] = await Promise.all([
     db.sale.findMany({
       where: { tenantId, status: "COMPLETED", isCredit: false, invoiceDate: { gte: range.from, lt: range.to } },
       select: { id: true, total: true, profit: true, costAmount: true, taxAmount: true, invoiceDate: true },
@@ -83,6 +91,11 @@ export async function getReportData(db: Db, tenantId: string, range: ReportRange
     db.journalEntry.findMany({
       where: { tenantId, status: "POSTED", date: { gte: range.from, lt: range.to } },
       select: { id: true, entryNumber: true, date: true, description: true },
+    }),
+    db.mealServing.findMany({
+      where: { tenantId, servedAt: { gte: range.from, lt: range.to } },
+      select: { id: true, name: true, servedAt: true, quantityKg: true, note: true },
+      orderBy: { servedAt: "desc" },
     }),
   ]);
 
@@ -154,9 +167,14 @@ export async function getReportData(db: Db, tenantId: string, range: ReportRange
 
   return {
     period: { ...meta, from: range.from.toISOString(), to: range.to.toISOString(), generatedAt: new Date().toISOString() },
-    summary: { revenue, cogs, grossProfit, tax, expenses: expenseTotal, netProfit, rawStockValue, finishedStockValue, receivables, payables },
+    summary: {
+      revenue, cogs, grossProfit, tax, expenses: expenseTotal, netProfit, rawStockValue, finishedStockValue, receivables, payables,
+      mealsTotalKg: round(meals.reduce((acc, meal) => acc + Number(meal.quantityKg), 0), 3),
+      mealsCount: meals.length,
+    },
     salesByProduct,
     trialBalance,
     journalEntries: journalEntries.slice(0, 50),
+    meals,
   };
 }

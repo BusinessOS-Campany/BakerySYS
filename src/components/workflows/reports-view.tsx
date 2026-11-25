@@ -5,8 +5,8 @@ import Link from "next/link";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { Download, FileText, Printer } from "lucide-react";
-import { apiFetch, L, type Locale } from "./shared";
-import { formatMoney } from "@/lib/i18n/dictionary";
+import { apiFetch, L, numericLocale, type Locale } from "./shared";
+import { formatDate, formatMoney } from "@/lib/i18n/dictionary";
 import { ReportSheet, type ReportData } from "./report-sheet";
 
 export type Period = "day" | "week" | "month";
@@ -18,15 +18,56 @@ const TABS: { key: Period; href: string; ar: string; en: string }[] = [
   { key: "month", href: "/reports/monthly", ar: "شهري", en: "Monthly" },
 ];
 
-export function ReportsPage({ locale, canExport, currency, decimalPlaces, period, tenantName }: {
+const DAY_MS = 86_400_000;
+
+function dateKeyInZone(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function mondayOfKey(key: string) {
+  const date = new Date(`${key}T00:00:00.000Z`);
+  const weekday = date.getUTCDay() || 7;
+  return new Date(date.getTime() - (weekday - 1) * DAY_MS);
+}
+
+function weekValueFromKey(key: string) {
+  const monday = mondayOfKey(key);
+  const thursday = new Date(monday.getTime() + 3 * DAY_MS);
+  const year = thursday.getUTCFullYear();
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Weekday = jan4.getUTCDay() || 7;
+  const week1Monday = new Date(jan4.getTime() - (jan4Weekday - 1) * DAY_MS);
+  const week = Math.floor((monday.getTime() - week1Monday.getTime()) / (7 * DAY_MS)) + 1;
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
+
+function keyFromWeekValue(value: string, fallback: string) {
+  const match = /^(\d{4})-W(\d{2})$/.exec(value);
+  if (!match) return fallback;
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  if (week < 1 || week > 53) return fallback;
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Weekday = jan4.getUTCDay() || 7;
+  const week1Monday = new Date(jan4.getTime() - (jan4Weekday - 1) * DAY_MS);
+  return new Date(week1Monday.getTime() + (week - 1) * 7 * DAY_MS).toISOString().slice(0, 10);
+}
+
+export function ReportsPage({ locale, canExport, currency, decimalPlaces, period, tenantName, timezone }: {
   locale: Locale;
   canExport: boolean;
   currency: string;
   decimalPlaces: number;
   period: Period;
   tenantName: string;
+  timezone: string;
 }) {
   const [report, setReport] = useState<ReportData | null>(null);
+  const [anchor, setAnchor] = useState(() => dateKeyInZone(new Date(), timezone));
   const [insights, setInsights] = useState<Insight[]>([]);
   const [provider, setProvider] = useState("");
   const [error, setError] = useState("");
@@ -35,20 +76,37 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
   const tab = TABS.find((item) => item.key === period)!;
   const periodTitle = L(locale, tab.ar, tab.en);
   const money = (value: number) => formatMoney(value, locale, currency, decimalPlaces);
+  const selectorLabel = period === "day"
+    ? L(locale, "اختر اليوم", "Select day")
+    : period === "week"
+      ? L(locale, "اختر الأسبوع", "Select week")
+      : L(locale, "اختر الشهر", "Select month");
+  const selectorType = period === "day" ? "date" : period === "week" ? "week" : "month";
+  const selectorValue = period === "week" ? weekValueFromKey(anchor) : period === "month" ? anchor.slice(0, 7) : anchor;
+  const selectedRange = report
+    ? `${formatDate(report.period.from, locale)} — ${formatDate(new Date(Date.parse(report.period.to) - DAY_MS), locale)}`
+    : "";
   const cards = report ? [
     { key: "revenue", label: L(locale, "الإيرادات", "Revenue"), value: money(report.summary.revenue), tone: "text-[var(--primary)]" },
     { key: "profit", label: L(locale, "الربح الإجمالي", "Gross profit"), value: money(report.summary.grossProfit), tone: "text-emerald-500" },
     { key: "expenses", label: L(locale, "المصروفات", "Expenses"), value: money(report.summary.expenses), tone: "text-[var(--danger)]" },
     { key: "net", label: L(locale, "صافي الربح", "Net profit"), value: money(report.summary.netProfit), tone: report.summary.netProfit >= 0 ? "text-emerald-500" : "text-[var(--danger)]" },
     { key: "receivables", label: L(locale, "المدينون", "Receivables"), value: money(report.summary.receivables), tone: "text-amber-500" },
+    {
+      key: "meals",
+      label: L(locale, "الوجبات المقدمة", "Meals served"),
+      value: `${new Intl.NumberFormat(numericLocale(locale), { maximumFractionDigits: 3 }).format(report.summary.mealsTotalKg)} kg`,
+      tone: "text-sky-500",
+    },
   ] : [];
 
   const load = useCallback(async () => {
     setError("");
     try {
+      const query = new URLSearchParams({ period, date: anchor });
       const [data, ai] = await Promise.all([
-        apiFetch<ReportData>(`/api/reports?period=${period}`, locale),
-        apiFetch<{ provider: string; insights: Insight[] }>(`/api/ai/insights?period=${period}`, locale),
+        apiFetch<ReportData>(`/api/reports?${query}`, locale),
+        apiFetch<{ provider: string; insights: Insight[] }>(`/api/ai/insights?${query}`, locale),
       ]);
       setReport(data);
       setInsights(ai.insights);
@@ -56,7 +114,7 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [period, locale]);
+  }, [period, locale, anchor]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -66,13 +124,13 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
       const csv = await apiFetch<string>("/api/reports", locale, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ period }),
+        body: JSON.stringify({ period, date: anchor }),
       });
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `bakery-report-${period}-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `bakery-report-${period}-${anchor}.csv`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -111,7 +169,7 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
         offset += pageHeight;
         page += 1;
       }
-      pdf.save(`bakery-report-${period}-${new Date().toISOString().slice(0, 10)}.pdf`);
+      pdf.save(`bakery-report-${period}-${anchor}.pdf`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -159,10 +217,31 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
         ))}
       </nav>
 
+      <section className="card flex flex-wrap items-center gap-3 p-3 print:hidden">
+        <label className="text-sm font-semibold" htmlFor="report-period-selector">{selectorLabel}</label>
+        <input
+          className="input h-9 w-auto min-w-[11rem]"
+          id="report-period-selector"
+          onChange={(event) => {
+            const raw = event.target.value;
+            if (!raw) return;
+            if (period === "week") setAnchor(keyFromWeekValue(raw, anchor));
+            else if (period === "month") setAnchor(`${raw}-01`);
+            else setAnchor(raw);
+          }}
+          type={selectorType}
+          value={selectorValue}
+        />
+        <span className="muted text-xs">
+          {L(locale, "تُستخدم هذه الفترة للطباعة وملف CSV", "This period is used for printing and CSV")}
+        </span>
+        {selectedRange ? <span className="text-xs font-semibold tabular-nums">{selectedRange}</span> : null}
+      </section>
+
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
       {cards.length > 0 ? (
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
           {cards.map((card) => (
             <div className="card p-4 transition-shadow hover:shadow-md" key={card.key}>
               <div className="muted text-xs">{card.label}</div>
