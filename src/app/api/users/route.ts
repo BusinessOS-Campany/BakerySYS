@@ -8,6 +8,7 @@ import { serialize } from "@/lib/serialize";
 
 export const GET = apiRoute({
   permission: "users.manage",
+  adminOnly: true,
   handler: async (_input, auth) => {
     const [users, userRoles, branches, roles] = await Promise.all([
       db.user.findMany({
@@ -37,6 +38,7 @@ const schema = z.object({
 
 export const POST = apiRoute({
   permission: "users.manage",
+  adminOnly: true,
   schema,
   handler: async (input, auth) => {
     const existing = await db.user.findUnique({ where: { email: input.email.toLowerCase() }, select: { id: true } });

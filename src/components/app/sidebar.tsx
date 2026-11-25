@@ -21,6 +21,7 @@ const ICONS: Record<string, LucideIcon> = {
 export function Sidebar({
   locale,
   permissions,
+  isAdmin,
   collapsed,
   mobileOpen,
   onCollapse,
@@ -29,6 +30,7 @@ export function Sidebar({
 }: {
   locale: Locale;
   permissions: string[];
+  isAdmin: boolean;
   collapsed: boolean;
   mobileOpen: boolean;
   onCollapse: () => void;
@@ -91,7 +93,7 @@ export function Sidebar({
 
         <nav className="scroll-thin flex-1 space-y-4 overflow-y-auto px-3 py-4">
           {NAV_SECTIONS.map((section) => {
-            const items = section.items.filter((item) => can(item.permission));
+            const items = section.items.filter((item) => (!item.adminOnly || isAdmin) && can(item.permission));
             if (items.length === 0) return null;
             return (
               <div key={section.titleKey}>

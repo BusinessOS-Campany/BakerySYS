@@ -181,9 +181,14 @@ export async function requireAuth(): Promise<AuthContext> {
   return auth;
 }
 
+/** Admin means the tenant OWNER role (the admin account). */
+export function isAdmin(auth: AuthContext): boolean {
+  return auth.roles.includes("OWNER");
+}
+
 export async function requirePermission(code: string): Promise<AuthContext> {
   const auth = await requireAuth();
-  if (!auth.permissions.has(code) && !auth.roles.includes("OWNER")) {
+  if (!auth.permissions.has(code) && !isAdmin(auth)) {
     throw new AppError("FORBIDDEN", `Missing permission: ${code}`, "ليس لديك صلاحية لتنفيذ هذا الإجراء");
   }
   return auth;

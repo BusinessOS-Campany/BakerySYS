@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { apiRoute } from "@/lib/http";
+import { isAdmin } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import type { SearchGroup, SearchPayload, SearchResult } from "@/lib/search/types";
 import { numericLocale } from "@/lib/i18n/dictionary";
@@ -81,7 +82,7 @@ export const GET = apiRoute<unknown, SearchPayload>({
       })));
     }
 
-    if (can("users.manage")) {
+    if (isAdmin(auth)) {
       tasks.push(db.user.findMany({
         where: {
           tenantId,

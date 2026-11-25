@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { apiRoute } from "@/lib/http";
-import { PERMISSIONS } from "@/lib/permissions/catalog";
+import { ASSIGNABLE_PERMISSIONS, PERMISSIONS, isAssignablePermission } from "@/lib/permissions/catalog";
 import { AppError } from "@/lib/errors";
 import { serialize } from "@/lib/serialize";
 
 export const GET = apiRoute({
   permission: "users.manage",
+  adminOnly: true,
   handler: async (_input, auth) => {
     const [roles, permissions] = await Promise.all([
       db.role.findMany({ where: { tenantId: auth.user.tenantId }, orderBy: { createdAt: "asc" } }),
@@ -17,7 +18,7 @@ export const GET = apiRoute({
         ...role,
         permissionCodes: permissions.filter((p) => p.roleId === role.id).map((p) => p.permission),
       })),
-      availablePermissions: PERMISSIONS,
+      availablePermissions: ASSIGNABLE_PERMISSIONS,
     });
   },
 });
@@ -32,10 +33,12 @@ const schema = z.object({
 
 export const POST = apiRoute({
   permission: "users.manage",
+  adminOnly: true,
   schema,
   handler: async (input, auth) => {
     const existing = await db.role.findFirst({ where: { tenantId: auth.user.tenantId, code: input.code } });
     if (existing) throw new AppError("CONFLICT", "Role already exists", "الدور موجود بالفعل");
+    const permissionCodes = input.permissionCodes.filter(isAssignablePermission);
     const role = await db.$transaction(async (tx) => {
       const created = await tx.role.create({
         data: {
@@ -48,7 +51,7 @@ export const POST = apiRoute({
         },
       });
       await tx.rolePermission.createMany({
-        data: input.permissionCodes.map((permission) => ({
+        data: permissionCodes.map((permission) => ({
           tenantId: auth.user.tenantId, roleId: created.id, permission,
         })),
       });

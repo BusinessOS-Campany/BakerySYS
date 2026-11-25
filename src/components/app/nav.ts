@@ -3,6 +3,7 @@ export type NavItem = {
   labelKey: string;
   icon: string;
   permission: string;
+  adminOnly?: boolean;
 };
 
 export type NavSection = {
@@ -46,7 +47,7 @@ export const NAV_SECTIONS: NavSection[] = [
     titleKey: "shell.section.admin",
     items: [
       { href: "/employees", labelKey: "nav.employees", icon: "UsersRound", permission: "hr.view" },
-      { href: "/users", labelKey: "nav.users", icon: "UserCog", permission: "users.manage" },
+      { href: "/users", labelKey: "nav.users", icon: "UserCog", permission: "users.manage", adminOnly: true },
       { href: "/settings", labelKey: "nav.settings", icon: "Settings", permission: "settings.view" },
     ],
   },

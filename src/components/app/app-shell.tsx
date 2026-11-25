@@ -13,6 +13,7 @@ export function AppShell({
   userName,
   userEmail,
   permissions,
+  isAdmin,
   branches,
   currentBranchId,
   canSeeAllBranches,
@@ -24,6 +25,7 @@ export function AppShell({
   userName: string;
   userEmail: string;
   permissions: string[];
+  isAdmin: boolean;
   branches: BranchOption[];
   currentBranchId: string | null;
   canSeeAllBranches: boolean;
@@ -50,6 +52,7 @@ export function AppShell({
       <Sidebar
         locale={locale}
         permissions={permissions}
+        isAdmin={isAdmin}
         collapsed={collapsed}
         mobileOpen={mobileOpen}
         onCollapse={toggleCollapse}

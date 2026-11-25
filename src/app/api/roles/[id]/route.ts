@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { apiRoute } from "@/lib/http";
-import { PERMISSIONS } from "@/lib/permissions/catalog";
+import { PERMISSIONS, isAssignablePermission } from "@/lib/permissions/catalog";
 import { AppError } from "@/lib/errors";
 import { serialize } from "@/lib/serialize";
 
@@ -14,6 +14,7 @@ const schema = z.object({
 
 export const PATCH = apiRoute({
   permission: "users.manage",
+  adminOnly: true,
   schema,
   handler: async (input, auth, _req, ctx) => {
     const { id } = await ctx.params;
@@ -31,9 +32,10 @@ export const PATCH = apiRoute({
       });
       if (input.permissionCodes) {
         await tx.rolePermission.deleteMany({ where: { tenantId: auth.user.tenantId, roleId: id } });
-        if (input.permissionCodes.length) {
+        const permissionCodes = input.permissionCodes.filter(isAssignablePermission);
+        if (permissionCodes.length) {
           await tx.rolePermission.createMany({
-            data: input.permissionCodes.map((permission) => ({ tenantId: auth.user.tenantId, roleId: id, permission })),
+            data: permissionCodes.map((permission) => ({ tenantId: auth.user.tenantId, roleId: id, permission })),
           });
         }
       }
@@ -45,6 +47,7 @@ export const PATCH = apiRoute({
 
 export const DELETE = apiRoute({
   permission: "users.manage",
+  adminOnly: true,
   handler: async (_input, auth, _req, ctx) => {
     const { id } = await ctx.params;
     const role = await db.role.findFirst({ where: { id, tenantId: auth.user.tenantId } });

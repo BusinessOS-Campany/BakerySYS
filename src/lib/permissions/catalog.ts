@@ -20,9 +20,23 @@ export const PERMISSIONS = [
 
 export type PermissionCode = (typeof PERMISSIONS)[number];
 
+/** Only the tenant OWNER/admin account can manage users and permissions. */
+export const ADMIN_ONLY_PERMISSIONS = ["users.manage"] as const;
+type AdminOnlyPermission = (typeof ADMIN_ONLY_PERMISSIONS)[number];
+
+/** Permissions that can be assigned to non-owner roles. */
+export const ASSIGNABLE_PERMISSIONS = PERMISSIONS.filter(
+  (permission): permission is Exclude<PermissionCode, AdminOnlyPermission> =>
+    !(ADMIN_ONLY_PERMISSIONS as readonly string[]).includes(permission),
+);
+
+export function isAssignablePermission(code: string): boolean {
+  return (ASSIGNABLE_PERMISSIONS as readonly string[]).includes(code);
+}
+
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, readonly string[]> = {
   OWNER: PERMISSIONS,
-  GENERAL_MANAGER: PERMISSIONS.filter((p) => p !== "hr.salary" && p !== "settings.manage"),
+  GENERAL_MANAGER: PERMISSIONS.filter((p) => p !== "hr.salary" && p !== "settings.manage" && p !== "users.manage"),
   ACCOUNTANT: [
     "dashboard.view", "finance.view", "finance.manage", "accounting.view", "accounting.manage",
     "expenses.view", "expenses.manage", "reports.view", "reports.export", "sales.view",

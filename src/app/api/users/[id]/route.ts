@@ -18,6 +18,7 @@ const schema = z.object({
 
 export const PATCH = apiRoute({
   permission: "users.manage",
+  adminOnly: true,
   schema,
   handler: async (input, auth, _req, ctx) => {
     const { id } = await ctx.params;
@@ -66,6 +67,7 @@ export const PATCH = apiRoute({
 
 export const DELETE = apiRoute({
   permission: "users.manage",
+  adminOnly: true,
   handler: async (_input, auth, _req, ctx) => {
     const { id } = await ctx.params;
     if (id === auth.user.id) {

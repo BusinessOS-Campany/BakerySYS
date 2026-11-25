@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { getAuth } from "@/lib/auth/session";
+import { getAuth, isAdmin } from "@/lib/auth/session";
 import { AppShell } from "@/components/app/app-shell";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       userName={userName}
       userEmail={auth.user.email}
       permissions={[...auth.permissions]}
+      isAdmin={isAdmin(auth)}
       branches={branches}
       currentBranchId={auth.branchId}
       canSeeAllBranches={auth.branchIds.length === 0}

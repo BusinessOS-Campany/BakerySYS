@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requirePermission, type AuthContext } from "@/lib/auth/session";
+import { isAdmin, requirePermission, type AuthContext } from "@/lib/auth/session";
 import { AppError, errorPayload, toAppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { requestId } from "@/lib/audit";
@@ -19,6 +19,8 @@ type Handler<I, O, P extends Record<string, string>> = (
  */
 export function apiRoute<I, O, P extends Record<string, string> = Record<string, string>>(options: {
   permission: string;
+  /** Require the tenant OWNER/admin role, even if the caller has the permission code. */
+  adminOnly?: boolean;
   schema?: z.ZodType<I>;
   idempotent?: boolean;
   handler: Handler<I, O, P>;
@@ -27,6 +29,9 @@ export function apiRoute<I, O, P extends Record<string, string> = Record<string,
     const rid = requestId();
     try {
       const auth = await requirePermission(options.permission);
+      if (options.adminOnly && !isAdmin(auth)) {
+        throw new AppError("FORBIDDEN", "Admin access required", "هذا الإجراء متاح للمسؤول فقط");
+      }
       let body: unknown = {};
       if (req.method !== "GET" && req.method !== "DELETE") {
         body = await req.json().catch(() => ({}));
