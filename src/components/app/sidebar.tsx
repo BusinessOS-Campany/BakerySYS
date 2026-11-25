@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3, Boxes, ClipboardList, Croissant, Landmark,
-  LayoutDashboard, PackagePlus, PanelLeftClose, PanelLeftOpen, ReceiptText, Settings,
+  LayoutDashboard, LogOut, PackagePlus, PanelLeftClose, PanelLeftOpen, ReceiptText, Settings,
   ShoppingCart, Tags, UserCog, UsersRound, UtensilsCrossed, Wallet,
   Warehouse, X, type LucideIcon,
 } from "lucide-react";
@@ -14,7 +14,7 @@ import { translate, type Locale } from "@/lib/i18n/dictionary";
 
 const ICONS: Record<string, LucideIcon> = {
   BarChart3, Boxes, ClipboardList, Croissant, Landmark,
-  LayoutDashboard, PackagePlus, ReceiptText, Settings, ShoppingCart, Tags,
+  LayoutDashboard, LogOut, PackagePlus, ReceiptText, Settings, ShoppingCart, Tags,
   UserCog, UsersRound, UtensilsCrossed, Wallet, Warehouse,
 };
 
