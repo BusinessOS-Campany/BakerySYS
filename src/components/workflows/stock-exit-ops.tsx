@@ -1,61 +1,76 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowLeft, Check, LogOut, Package, RefreshCw } from "lucide-react";
-import { apiFetch, apiSend, L, numericLocale, type Locale } from "./shared";
+import { AlertCircle, ArrowLeft, LogOut, RefreshCw } from "lucide-react";
+import { DataPanel, apiFetch, L, type Locale } from "./shared";
+import { formatDateTime, formatNumber } from "@/lib/i18n/dictionary";
 
-type IngredientLot = {
+type MovementRow = {
   id: string;
-  warehouseId: string;
+  createdAt: string;
   ingredientId: string;
-  lotNumber: string;
+  warehouseId: string;
+  movementType: string;
+  referenceId: string | null;
   quantity: string | number;
   unitCost: string | number;
-  receivedAt: string;
+  note: string | null;
 };
-
-type IngredientOption = { id: string; nameAr: string; nameEn: string; sku: string };
-type WarehouseOption = { id: string; nameAr?: string | null; nameEn?: string | null };
 
 type InventoryPayload = {
-  ingredientLots: IngredientLot[];
-  ingredients: IngredientOption[];
-  warehouses: WarehouseOption[];
+  ingredients: { id: string; nameAr: string; nameEn: string }[];
+  warehouses: { id: string; nameAr?: string | null; nameEn?: string | null }[];
 };
 
-/** Whole numbers show without a trailing ".00"; fractions keep up to 2 decimals. */
-function formatAmount(value: number | string, locale: Locale): string {
-  const n = typeof value === "string" ? Number(value) : value;
-  return new Intl.NumberFormat(numericLocale(locale), {
-    numberingSystem: "latn",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(Number.isFinite(n) ? n : 0);
-}
+type ExitRow = {
+  id: string;
+  createdAt: string;
+  ingredient: string;
+  lotNumber: string;
+  warehouse: string;
+  quantity: number;
+  value: number;
+  note: string;
+};
 
-export function StockExitPage({
-  locale,
-  canManage,
-  selectedLotId = "",
-}: {
-  locale: Locale;
-  canManage: boolean;
-  selectedLotId?: string;
-}) {
-  const [data, setData] = useState<InventoryPayload | null>(null);
+export function StockExitPage({ locale, timezone }: { locale: Locale; timezone: string }) {
+  const [rows, setRows] = useState<ExitRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lotId, setLotId] = useState(selectedLotId);
-  const [quantity, setQuantity] = useState("");
-  const [note, setNote] = useState("");
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setData(await apiFetch<InventoryPayload>("/api/inventory", locale));
+      const [inventory, movements] = await Promise.all([
+        apiFetch<InventoryPayload>("/api/inventory", locale),
+        apiFetch<{ items?: MovementRow[] }>("/api/inventory/movements?type=RAW", locale),
+      ]);
+      const ingredientName = (id: string) => {
+        const item = inventory.ingredients.find((entry) => entry.id === id);
+        if (!item) return "—";
+        return locale === "ar" ? item.nameAr : item.nameEn;
+      };
+      const warehouseName = (id: string) => {
+        const item = inventory.warehouses.find((entry) => entry.id === id);
+        if (!item) return L(locale, "مخزن غير معروف", "Unknown warehouse");
+        const fallback = L(locale, "مخزن غير معروف", "Unknown warehouse");
+        return locale === "ar" ? item.nameAr ?? item.nameEn ?? fallback : item.nameEn ?? item.nameAr ?? fallback;
+      };
+      setRows(
+        (movements.items ?? [])
+          .filter((row) => row.movementType === "MANUAL_STOCK_EXIT")
+          .map((row) => ({
+            id: row.id,
+            createdAt: row.createdAt,
+            ingredient: ingredientName(row.ingredientId),
+            lotNumber: row.referenceId ?? "—",
+            warehouse: warehouseName(row.warehouseId),
+            quantity: Number(row.quantity),
+            value: Number(row.quantity) * Number(row.unitCost),
+            note: row.note ?? "",
+          })),
+      );
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -66,87 +81,20 @@ export function StockExitPage({
 
   useEffect(() => { void load(); }, [load]);
 
-  const lots = useMemo(
-    () => [...(data?.ingredientLots ?? [])].sort(
-      (a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime(),
-    ),
-    [data],
-  );
-
-  useEffect(() => {
-    if (selectedLotId && lots.some((lot) => lot.id === selectedLotId)) {
-      setLotId((current) => current || selectedLotId);
-    }
-  }, [selectedLotId, lots]);
-
-  function ingredientName(id: string) {
-    const item = data?.ingredients.find((entry) => entry.id === id);
-    if (!item) return "—";
-    return locale === "ar" ? item.nameAr : item.nameEn;
-  }
-
-  function warehouseName(id: string) {
-    const item = data?.warehouses.find((entry) => entry.id === id);
-    if (!item) return L(locale, "مخزن غير معروف", "Unknown warehouse");
-    return locale === "ar" ? item.nameAr ?? item.nameEn : item.nameEn ?? item.nameAr;
-  }
-
-  const selectedLot = lots.find((lot) => lot.id === lotId) ?? null;
-  const amount = Number(quantity);
-  const remainingPreview = selectedLot && Number.isFinite(amount) && amount > 0
-    ? Math.max(0, Number(selectedLot.quantity) - amount)
-    : Number(selectedLot?.quantity ?? 0);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedLot) {
-      setError(L(locale, "اختر دفعة للمصروف", "Select a batch to issue"));
-      return;
-    }
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setError(L(locale, "أدخل كمية صحيحة", "Enter a valid quantity"));
-      return;
-    }
-    if (amount > Number(selectedLot.quantity) + 1e-9) {
-      setError(L(locale, "الكمية أكبر من المتاح في الدفعة", "Quantity exceeds the batch balance"));
-      return;
-    }
-    setSaving(true);
-    setError("");
-    setMessage("");
-    try {
-      const result = await apiSend<{ remaining: string | number }>(
-        `/api/inventory/lots/${selectedLot.id}/exit`,
-        "POST",
-        { quantity: amount, note: note.trim() || undefined },
-        locale,
-      );
-      setMessage(
-        `${L(locale, "تم الصرف", "Stock issued")}: ${formatAmount(amount, locale)} · ${L(locale, "المتبقي", "Remaining")}: ${formatAmount(result.remaining, locale)}`,
-      );
-      setQuantity("");
-      setNote("");
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
-    }
-  }
+  const totalQuantity = useMemo(() => rows.reduce((sum, row) => sum + row.quantity, 0), [rows]);
+  const totalValue = useMemo(() => rows.reduce((sum, row) => sum + row.value, 0), [rows]);
 
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">
-            {L(locale, "المصروف من المخزن", "Stock issued")}
-          </h1>
+          <h1 className="text-2xl font-bold">{L(locale, "المصروف من المخزن", "Stock issued")}</h1>
           <p className="muted mt-1 text-sm">
-            {L(locale, "صرف كمية من دفعة مخزون مع حفظ سجل الحركة", "Issue a quantity from a stock batch while keeping movement history")}
+            {L(locale, "سجل الكميات المصروفة من دفعات المخزون", "Record of quantities issued from stock batches")}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn btn-secondary" disabled={loading || saving} onClick={() => void load()} type="button">
+          <button className="btn btn-secondary" disabled={loading} onClick={() => void load()} type="button">
             <RefreshCw className="h-4 w-4" /> {L(locale, "تحديث", "Refresh")}
           </button>
           <Link className="btn btn-secondary" href="/inventory">
@@ -160,100 +108,49 @@ export function StockExitPage({
           <AlertCircle className="h-4 w-4" /> {error}
         </div>
       ) : null}
-      {message ? (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700" role="status">
-          <Check className="h-4 w-4" /> {message}
+
+      <p className="muted rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-xs">
+        <LogOut className="me-1 inline h-3.5 w-3.5" />
+        {L(
+          locale,
+          "لإضافة مصروف جديد، اضغط زر «صرف» على بطاقة الدفعة في صفحة المخزون.",
+          "To issue new stock, click «Exit» on a batch card in the Inventory page.",
+        )}
+      </p>
+
+      <section className="grid gap-3 sm:grid-cols-3">
+        <div className="card p-4">
+          <div className="muted text-xs">{L(locale, "عدد عمليات الصرف", "Exit operations")}</div>
+          <div className="mt-2 text-xl font-bold tabular-nums">{formatNumber(rows.length, locale, 0)}</div>
         </div>
-      ) : null}
-
-      <section className="card p-4">
-        <div className="flex items-center gap-2">
-          <h2 className="flex items-center gap-2 text-sm font-bold">
-            <LogOut className="h-4 w-4" /> {L(locale, "صرف من دفعة", "Issue from a batch")}
-          </h2>
+        <div className="card p-4">
+          <div className="muted text-xs">{L(locale, "إجمالي الكمية المصروفة", "Total issued quantity")}</div>
+          <div className="mt-2 text-xl font-bold tabular-nums text-[var(--primary)]">{formatNumber(totalQuantity, locale, 2)}</div>
         </div>
-        {!canManage ? (
-          <p className="muted mt-2 text-xs">
-            {L(locale, "ليست لديك صلاحية الصرف من المخزون.", "You do not have permission to issue stock.")}
-          </p>
-        ) : null}
-        <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submit(event)}>
-          <label className="block text-xs font-medium sm:col-span-2">
-            {L(locale, "دفعة المخزون", "Stock batch")}
-            <select
-              className="input mt-1"
-              disabled={loading || saving}
-              onChange={(event) => {
-                setLotId(event.target.value);
-                setQuantity("");
-                setError("");
-                setMessage("");
-              }}
-              value={lotId}
-            >
-              <option value="">{L(locale, "— اختر الدفعة —", "— Select a batch —")}</option>
-              {lots.map((lot) => (
-                <option key={lot.id} value={lot.id}>
-                  {ingredientName(lot.ingredientId)} · {lot.lotNumber} · {formatAmount(lot.quantity, locale)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block text-xs font-medium">
-            {L(locale, "الكمية المصروفة", "Exit quantity")}
-            <input
-              className="input mt-1"
-              disabled={loading || saving || !selectedLot}
-              max={Number(selectedLot?.quantity ?? 0)}
-              min="0"
-              onChange={(event) => setQuantity(event.target.value)}
-              placeholder="0"
-              step="any"
-              type="number"
-              value={quantity}
-            />
-          </label>
-          <label className="block text-xs font-medium">
-            {L(locale, "ملاحظة (اختياري)", "Note (optional)")}
-            <input
-              className="input mt-1"
-              disabled={loading || saving || !selectedLot}
-              maxLength={300}
-              onChange={(event) => setNote(event.target.value)}
-              value={note}
-            />
-          </label>
-
-          {selectedLot ? (
-            <div className="muted rounded-lg bg-[var(--surface-muted)] px-3 py-2 text-xs sm:col-span-2">
-              <Package className="me-1 inline h-3.5 w-3.5" />
-              {ingredientName(selectedLot.ingredientId)} · {selectedLot.lotNumber} · {warehouseName(selectedLot.warehouseId)}
-              <span className="mx-2">·</span>
-              {L(locale, "المتاح", "Available")}: <strong className="font-semibold">{formatAmount(selectedLot.quantity, locale)}</strong>
-              <span className="mx-2">·</span>
-              {L(locale, "المتبقي بعد الصرف", "Remaining after exit")}:{" "}
-              <strong className="font-semibold">{formatAmount(remainingPreview, locale)}</strong>
-            </div>
-          ) : null}
-
-          <div className="flex items-end gap-2 sm:col-span-2">
-            <button
-              className="btn btn-primary"
-              disabled={!canManage || saving || loading || !selectedLot}
-              type="submit"
-            >
-              <LogOut className="h-4 w-4" />
-              {saving
-                ? L(locale, "جارٍ الصرف...", "Issuing...")
-                : L(locale, "تأكيد الصرف", "Confirm exit")}
-            </button>
-            <Link className="btn btn-secondary" href="/inventory">
-              {L(locale, "إلغاء", "Cancel")}
-            </Link>
-          </div>
-        </form>
+        <div className="card p-4">
+          <div className="muted text-xs">{L(locale, "إجمالي قيمة المصروف", "Total issued value")}</div>
+          <div className="mt-2 text-xl font-bold tabular-nums">{formatNumber(totalValue, locale, 2)}</div>
+        </div>
       </section>
+
+      <DataPanel<ExitRow>
+        canManage={false}
+        columns={[
+          { key: "createdAt", label: L(locale, "التاريخ والوقت", "Date & time"), render: (row) => formatDateTime(row.createdAt, locale, timezone, false) },
+          { key: "ingredient", label: L(locale, "المادة", "Ingredient") },
+          { key: "lotNumber", label: L(locale, "الدفعة", "Batch") },
+          { key: "warehouse", label: L(locale, "المخزن", "Warehouse") },
+          { key: "quantity", label: L(locale, "الكمية", "Quantity"), render: (row) => formatNumber(row.quantity, locale, 2) },
+          { key: "value", label: L(locale, "القيمة", "Value"), render: (row) => formatNumber(row.value, locale, 2) },
+          { key: "note", label: L(locale, "ملاحظة", "Note"), render: (row) => row.note || "—" },
+        ]}
+        emptyLabel={L(locale, "لا توجد عمليات صرف بعد.", "No exit operations yet.")}
+        locale={locale}
+        loading={loading}
+        reload={load}
+        rows={rows}
+        title={L(locale, "سجل المصروف من المخزن", "Stock issue register")}
+      />
     </div>
   );
 }
