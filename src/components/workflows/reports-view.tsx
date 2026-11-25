@@ -188,7 +188,25 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
               : L(locale, "بيانات مالية وتشغيلية من قاعدة البيانات", "Financial and operational data from the database")}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-1">
+            <label className="text-xs font-semibold" htmlFor="report-period-selector">{selectorLabel}</label>
+            <input
+              className="input h-8 w-auto min-w-[10rem] text-xs"
+              id="report-period-selector"
+              onChange={(event) => {
+                const raw = event.target.value;
+                if (!raw) return;
+                if (period === "week") setAnchor(keyFromWeekValue(raw, anchor));
+                else if (period === "month") setAnchor(`${raw}-01`);
+                else setAnchor(raw);
+              }}
+              title={L(locale, "تُستخدم هذه الفترة للطباعة وملف CSV", "This period is used for printing and CSV")}
+              type={selectorType}
+              value={selectorValue}
+            />
+            {selectedRange ? <span className="muted hidden text-[11px] tabular-nums lg:inline">{selectedRange}</span> : null}
+          </div>
           {canExport ? (
             <>
               <button className="btn btn-secondary" disabled={busy || !report} onClick={() => void exportCsv()} type="button">
@@ -216,27 +234,6 @@ export function ReportsPage({ locale, canExport, currency, decimalPlaces, period
           </Link>
         ))}
       </nav>
-
-      <section className="card flex flex-wrap items-center gap-3 p-3 print:hidden">
-        <label className="text-sm font-semibold" htmlFor="report-period-selector">{selectorLabel}</label>
-        <input
-          className="input h-9 w-auto min-w-[11rem]"
-          id="report-period-selector"
-          onChange={(event) => {
-            const raw = event.target.value;
-            if (!raw) return;
-            if (period === "week") setAnchor(keyFromWeekValue(raw, anchor));
-            else if (period === "month") setAnchor(`${raw}-01`);
-            else setAnchor(raw);
-          }}
-          type={selectorType}
-          value={selectorValue}
-        />
-        <span className="muted text-xs">
-          {L(locale, "تُستخدم هذه الفترة للطباعة وملف CSV", "This period is used for printing and CSV")}
-        </span>
-        {selectedRange ? <span className="text-xs font-semibold tabular-nums">{selectedRange}</span> : null}
-      </section>
 
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
